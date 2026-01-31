@@ -147,6 +147,22 @@
 
 
 //
+// BIGNUM compatibility (BN_zero changed to void in OpenSSL 3.x)
+//
+#if defined(OPENSSL_3_X)
+  // In OpenSSL 3.x, BN_zero returns void instead of int
+  // Wrap it to return success (1) for compatibility with old code that checks return value
+  #undef BN_zero
+  inline int BN_zero_compat(BIGNUM *a)
+  {
+    BN_zero_ex(a);
+    return 1;  // Always succeeds
+  }
+  #define BN_zero(a) BN_zero_compat(a)
+#endif
+
+
+//
 // OpenSSL 3.0+ specific compatibility
 //
 #if defined(OPENSSL_3_X)

@@ -41,12 +41,14 @@ INCLUDEPATHS= \
  -I"$(CURDIR)"/obj \
  -I"$(OPENSSL_PREFIX)/include" \
  -I"$(DEPSDIR)/include" \
- -I"$(DEPSDIR)/include/db48"
+ -I"$(DEPSDIR)/include/db48" \
+ -I"$(DEPSDIR)/opt/berkeley-db@4/include"
 
 LIBPATHS= \
  -L"$(OPENSSL_PREFIX)/lib" \
  -L"$(DEPSDIR)/lib" \
- -L"$(DEPSDIR)/lib/db48"
+ -L"$(DEPSDIR)/lib/db48" \
+ -L"$(DEPSDIR)/opt/berkeley-db@4/lib"
 
 
 LIBS= -dead_strip
