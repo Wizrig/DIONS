@@ -12,7 +12,7 @@
 #include "checkpoints.h"
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
-#include <boost/filesystem/convenience.hpp>
+// boost/filesystem/convenience.hpp removed in modern Boost - functions now in boost/filesystem.hpp
 #include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
@@ -26,6 +26,9 @@
 
 using namespace std;
 using namespace boost;
+
+// Namespace alias to avoid ambiguity with std::filesystem (C++17)
+namespace fs = boost::filesystem;
 
 extern void xsc(CBlockIndex*);
 __wx__* pwalletMain;
@@ -408,12 +411,12 @@ bool AppInit2()
     fViewWallet = GetBoolArg("-viewwallet");
     if(fViewWallet)
     {
-      if(filesystem::exists(GetDataDir() / "wallet.dat"))
+      if(fs::exists(GetDataDir() / "wallet.dat"))
         return InitError(_("Initialization error. Configured as view wallet but wallet.dat file exists in configuration directory. I/O Coin shutting down."));
     }
     else
     {
-      if(filesystem::exists(GetDataDir() / "view.dat"))
+      if(fs::exists(GetDataDir() / "view.dat"))
         return InitError(_("Initialization error. Configured as default wallet but view.dat file exists in configuration directory. I/O Coin shutting down."));
     }
 
@@ -517,7 +520,8 @@ bool AppInit2()
     std::string strWalletFileName = GetArg("-wallet", "wallet.dat");
 
     // strWalletFileName must be a plain filename without a directory
-    if (strWalletFileName != boost::filesystem::basename(strWalletFileName) + boost::filesystem::extension(strWalletFileName))
+    // boost::filesystem::basename/extension deprecated - use path.filename() instead
+    if (strWalletFileName != boost::filesystem::path(strWalletFileName).filename().string())
         return InitError(strprintf(_("Wallet %s resides outside data directory %s."), strWalletFileName.c_str(), strDataDir.c_str()));
 
     // Make sure only a single Bitcoin process is using the data directory.
@@ -585,7 +589,7 @@ bool AppInit2()
             return false;
     }
 
-    if (filesystem::exists(GetDataDir() / strWalletFileName))
+    if (fs::exists(GetDataDir() / strWalletFileName))
     {
         CDBEnv::VerifyResult r = bitdb.Verify(strWalletFileName, __wx__DB::Recover);
         if (r == CDBEnv::RECOVER_OK)
@@ -862,11 +866,11 @@ bool AppInit2()
 
     if(GetBoolArg("-xscan"))
     {
-      filesystem::path dc = GetDataDir() / "aliascache.dat";
+      fs::path dc = GetDataDir() / "aliascache.dat";
       FILE *file = fopen(dc.string().c_str(), "rb");
       if (file) 
       {
-        filesystem::path dc__ = GetDataDir() / "aliascache.dat.old";
+        fs::path dc__ = GetDataDir() / "aliascache.dat.old";
         RenameOver(dc, dc__);
       }
     }
@@ -916,13 +920,13 @@ bool AppInit2()
         exit(0);
     }
 
-    filesystem::path pathBootstrap = GetDataDir() / "bootstrap.dat";
-    if (filesystem::exists(pathBootstrap)) {
+    fs::path pathBootstrap = GetDataDir() / "bootstrap.dat";
+    if (fs::exists(pathBootstrap)) {
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file."));
 
         FILE *file = fopen(pathBootstrap.string().c_str(), "rb");
         if (file) {
-            filesystem::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
+            fs::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
             LoadExternalBlockFile(file);
             RenameOver(pathBootstrap, pathBootstrapOld);
         }

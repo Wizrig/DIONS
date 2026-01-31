@@ -19,6 +19,9 @@
 using namespace std;
 using namespace boost;
 
+// Namespace alias to avoid ambiguity with std::filesystem (C++17)
+namespace fs = boost::filesystem;
+
 
 unsigned int nWalletDBUpdated;
 
@@ -68,11 +71,11 @@ bool CDBEnv::Open(boost::filesystem::path pathEnv_)
         return false;
 
     pathEnv = pathEnv_;
-    filesystem::path pathDataDir = pathEnv;
+   fs::path pathDataDir = pathEnv;
     strPath = pathDataDir.string();
-    filesystem::path pathLogDir = pathDataDir / "database";
-    filesystem::create_directory(pathLogDir);
-    filesystem::path pathErrorFile = pathDataDir / "db.log";
+   fs::path pathLogDir = pathDataDir / "database";
+   fs::create_directory(pathLogDir);
+   fs::path pathErrorFile = pathDataDir / "db.log";
     printf("dbenv.open LogDir=%s ErrorFile=%s\n", pathLogDir.string().c_str(), pathErrorFile.string().c_str());
 
     unsigned int nEnvFlags = 0;
