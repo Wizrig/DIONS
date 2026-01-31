@@ -5712,6 +5712,12 @@ Value sendPublicKey(const Array& params, bool fHelp)
 
     string sigBase64;
     string encrypted;
+    vector<unsigned char> nonce;
+    bool useV2 = DevNet::IsActive();
+
+    if (useV2 && !DIONS_V2::GenerateNonce(nonce))
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to generate nonce");
+
     if(getImportedPubKey(myAddress, f, recipientPubKeyVch, recipientAESKeyVch))
     {
       GenerateAESKey(aes256Key);
@@ -5728,25 +5734,71 @@ Value sendPublicKey(const Array& params, bool fHelp)
       if(!walletdb.UpdateKey(vchPubKey, pwalletMain->kd[vchPubKey.GetID()]))
         throw JSONRPCError(RPC_TYPE_ERROR, "Failed to write meta data for key");
 
-      ss <<(rsaPubKeyStr + encrypted);
-      if(!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+      if (useV2) {
+          // V2: Sign version||sender||recipient||nonce||rsaPubKey||encrypted
+          CDataStream ss2(SER_GETHASH, 0);
+          DIONS_V2::BuildSignatureData(ss2, myAddress, f, nonce, rsaPubKeyStr + encrypted);
+          if(!key.SignCompact(Hash(ss2.begin(), ss2.end()), vchSig))
+              throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+      } else {
+          // V0: Legacy signature
+          ss <<(rsaPubKeyStr + encrypted);
+          if(!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
+              throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+      }
+
       sigBase64 = EncodeBase64(&vchSig[0], vchSig.size());
-      scriptPubKey << OP_PUBLIC_KEY << vchSender << vchRecipient << vchKey
-                   << vchFromString(encrypted)
-                   << vchFromString(sigBase64)
-                   << OP_2DROP << OP_2DROP << OP_2DROP;
+
+      if (useV2) {
+          string nonceBase64 = EncodeBase64(&nonce[0], nonce.size());
+          scriptPubKey << OP_PUBLIC_KEY
+                       << vchFromValue((int)DIONS_MSG_VERSION_V2)
+                       << vchSender << vchRecipient
+                       << vchFromString(nonceBase64)
+                       << vchKey
+                       << vchFromString(encrypted)
+                       << vchFromString(sigBase64)
+                       << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP;
+      } else {
+          scriptPubKey << OP_PUBLIC_KEY << vchSender << vchRecipient << vchKey
+                       << vchFromString(encrypted)
+                       << vchFromString(sigBase64)
+                       << OP_2DROP << OP_2DROP << OP_2DROP;
+      }
     }
     else
     {
-      ss << rsaPubKeyStr + "I";
-      if(!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+      if (useV2) {
+          // V2: Sign version||sender||recipient||nonce||rsaPubKey||"I"
+          CDataStream ss2(SER_GETHASH, 0);
+          DIONS_V2::BuildSignatureData(ss2, myAddress, f, nonce, rsaPubKeyStr + "I");
+          if(!key.SignCompact(Hash(ss2.begin(), ss2.end()), vchSig))
+              throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+      } else {
+          // V0: Legacy signature
+          ss << rsaPubKeyStr + "I";
+          if(!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
+              throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+      }
+
       sigBase64 = EncodeBase64(&vchSig[0], vchSig.size());
-      scriptPubKey << OP_PUBLIC_KEY << vchSender << vchRecipient << vchKey
-                   << vchFromString("I")
-                   << vchFromString(sigBase64)
-                   << OP_2DROP << OP_2DROP << OP_2DROP;
+
+      if (useV2) {
+          string nonceBase64 = EncodeBase64(&nonce[0], nonce.size());
+          scriptPubKey << OP_PUBLIC_KEY
+                       << vchFromValue((int)DIONS_MSG_VERSION_V2)
+                       << vchSender << vchRecipient
+                       << vchFromString(nonceBase64)
+                       << vchKey
+                       << vchFromString("I")
+                       << vchFromString(sigBase64)
+                       << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP;
+      } else {
+          scriptPubKey << OP_PUBLIC_KEY << vchSender << vchRecipient << vchKey
+                       << vchFromString("I")
+                       << vchFromString(sigBase64)
+                       << OP_2DROP << OP_2DROP << OP_2DROP;
+      }
     }
 
 
@@ -6790,52 +6842,119 @@ ConnectInputsPost(map<uint256, CTxIndex>& mapTestPool,
         case OP_PUBLIC_KEY:
         case OP_VERTEX:
         {
-           const std::string sender(vvchArgs[0].begin(), vvchArgs[0].end());
-           const std::string recipient(vvchArgs[1].begin(), vvchArgs[1].end());
-           const std::string pkey(vvchArgs[2].begin(), vvchArgs[2].end());
-           const std::string aesEncrypted(stringFromVch(vvchArgs[3]));
-           const std::string sig(stringFromVch(vvchArgs[4]));
+           // Detect v2 format
+           bool isV2 = false;
+           int argOffset = 0;
 
-           cba addr(sender);
-
-           if(!addr.IsValid())
-             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
-
-           CKeyID keyID;
-           if(!addr.GetKeyID(keyID))
-               throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to key");
-
-           bool fInvalid = false;
-          vector<unsigned char> vchSig = DecodeBase64(sig.c_str(), &fInvalid);
-
-           if(fInvalid)
-               throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed base64 encoding");
-
-           CDataStream ss(SER_GETHASH, 0);
-           ss << pkey + aesEncrypted;
-
-           CKey key;
-           if(!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
-               return false;
-
-           if(key.GetPubKey().GetID() != keyID)
-           {
-                return error("public key plus aes key tx verification failed");
+           if (vvchArgs.size() >= 7) {
+               if (vvchArgs[0].size() == 1 && vvchArgs[0][0] == DIONS_MSG_VERSION_V2) {
+                   isV2 = true;
+                   argOffset = 1;
+               }
            }
 
-             vchType k1Base;
-             k1Base.reserve(vvchArgs[0].size() + vvchArgs[1].size());
-             k1Base.insert(k1Base.end(), vvchArgs[0].begin(), vvchArgs[0].end());
-             k1Base.insert(k1Base.end(), vvchArgs[1].begin(), vvchArgs[1].end());
-             std::map<std::vector<unsigned char>, std::set<uint256> >::iterator mi = k1Export.find(k1Base);
-             if(mi == k1Export.end())
-             {
-               ENTER_CRITICAL_SECTION(cs_main)
+           if (isV2) {
+               // V2: <version> <sender> <recipient> <nonce> <pkey> <aesEncrypted> <sig>
+               const std::string sender(vvchArgs[argOffset].begin(), vvchArgs[argOffset].end());
+               const std::string recipient(vvchArgs[argOffset+1].begin(), vvchArgs[argOffset+1].end());
+               const std::string nonceBase64(stringFromVch(vvchArgs[argOffset+2]));
+               const std::string pkey(vvchArgs[argOffset+3].begin(), vvchArgs[argOffset+3].end());
+               const std::string aesEncrypted(stringFromVch(vvchArgs[argOffset+4]));
+               const std::string sig(stringFromVch(vvchArgs[argOffset+5]));
+
+               cba addr(sender);
+               if(!addr.IsValid())
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
+
+               CKeyID keyID;
+               if(!addr.GetKeyID(keyID))
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to key");
+
+               bool fInvalid = false;
+               vector<unsigned char> vchSig = DecodeBase64(sig.c_str(), &fInvalid);
+               if(fInvalid)
+                   throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed signature");
+
+               vector<unsigned char> nonce = DecodeBase64(nonceBase64.c_str(), &fInvalid);
+               if(fInvalid || nonce.size() != V2_NONCE_SIZE)
+                   throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed nonce");
+
+               // Anti-replay check
+               uint256 msgHash = Hash(vvchArgs[argOffset+3].begin(), vvchArgs[argOffset+3].end());
+               if (!DIONS_V2::CheckReplay(msgHash))
+                   return error("V2 public key replay detected");
+
+               // Verify signature over: version||sender||recipient||nonce||pkey||aesEncrypted
+               CDataStream ss(SER_GETHASH, 0);
+               DIONS_V2::BuildSignatureData(ss, sender, recipient, nonce, pkey + aesEncrypted);
+
+               CKey key;
+               if(!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
+                   return false;
+
+               if(key.GetPubKey().GetID() != keyID)
+                   return error("V2 public key signature verification failed");
+
+               vchType k1Base;
+               k1Base.reserve(vvchArgs[argOffset].size() + vvchArgs[argOffset+1].size());
+               k1Base.insert(k1Base.end(), vvchArgs[argOffset].begin(), vvchArgs[argOffset].end());
+               k1Base.insert(k1Base.end(), vvchArgs[argOffset+1].begin(), vvchArgs[argOffset+1].end());
+               std::map<std::vector<unsigned char>, std::set<uint256> >::iterator mi = k1Export.find(k1Base);
+               if(mi == k1Export.end())
                {
-                 k1Export[k1Base].insert(tx.GetHash());
+                   ENTER_CRITICAL_SECTION(cs_main)
+                   {
+                       k1Export[k1Base].insert(tx.GetHash());
+                   }
+                   LEAVE_CRITICAL_SECTION(cs_main)
                }
-               LEAVE_CRITICAL_SECTION(cs_main)
-             }
+           } else {
+               // V0: <sender> <recipient> <pkey> <aesEncrypted> <sig>
+               const std::string sender(vvchArgs[0].begin(), vvchArgs[0].end());
+               const std::string recipient(vvchArgs[1].begin(), vvchArgs[1].end());
+               const std::string pkey(vvchArgs[2].begin(), vvchArgs[2].end());
+               const std::string aesEncrypted(stringFromVch(vvchArgs[3]));
+               const std::string sig(stringFromVch(vvchArgs[4]));
+
+               cba addr(sender);
+               if(!addr.IsValid())
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
+
+               CKeyID keyID;
+               if(!addr.GetKeyID(keyID))
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to key");
+
+               bool fInvalid = false;
+               vector<unsigned char> vchSig = DecodeBase64(sig.c_str(), &fInvalid);
+
+               if(fInvalid)
+                   throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed base64 encoding");
+
+               // V0: Legacy insecure signature (payload only)
+               CDataStream ss(SER_GETHASH, 0);
+               ss << pkey + aesEncrypted;
+
+               CKey key;
+               if(!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
+                   return false;
+
+               if(key.GetPubKey().GetID() != keyID)
+                   return error("public key plus aes key tx verification failed");
+
+               vchType k1Base;
+               k1Base.reserve(vvchArgs[0].size() + vvchArgs[1].size());
+               k1Base.insert(k1Base.end(), vvchArgs[0].begin(), vvchArgs[0].end());
+               k1Base.insert(k1Base.end(), vvchArgs[1].begin(), vvchArgs[1].end());
+               std::map<std::vector<unsigned char>, std::set<uint256> >::iterator mi = k1Export.find(k1Base);
+               if(mi == k1Export.end())
+               {
+                   ENTER_CRITICAL_SECTION(cs_main)
+                   {
+                       k1Export[k1Base].insert(tx.GetHash());
+                   }
+                   LEAVE_CRITICAL_SECTION(cs_main)
+               }
+           }
         }
             break;
         case OP_ENCRYPTED_MESSAGE:
