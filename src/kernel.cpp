@@ -423,7 +423,14 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 
 bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, uint256& targetProofOfStake, bool fPrintProofOfStake)
 {
-   
+    // DEVNET: Always succeed for deterministic block generation
+    if (DevNet::IsActive())
+    {
+        hashProofOfStake = 0;
+        targetProofOfStake = CBigNum().SetCompact(nBits).getuint256();
+        return true;
+    }
+
     if (V3(nBestHeight) || IsProtocolV2(pindexPrev->nHeight+1))
     {
       return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake);
@@ -436,7 +443,14 @@ bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBl
 
 bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, int64_t nTime, const COutPoint& prevout, int64_t* pBlockTime)
 {
-  
+    // DEVNET: Always succeed for deterministic block generation
+    if (DevNet::IsActive())
+    {
+        if (pBlockTime)
+            *pBlockTime = nTime;
+        return true;
+    }
+
     uint256 hashProofOfStake;
     uint256 targetProofOfStake;
 
