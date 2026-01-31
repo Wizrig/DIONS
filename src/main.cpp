@@ -3001,9 +3001,10 @@ bool LoadBlockIndex(bool fAllowNew)
         if (fDevNet)
         {
             txNew.vout.resize(2);  // Empty output + devnet prefund
-            // Deterministic devnet address: mqKqfUYTxDvmfHB3Bd3JBt8NZjVJi1Loom
-            // Privkey: cU3HMLC5rFV83Kq3pCTzLgxTvP86qo2uo8b7HvTfmHDEy6qinGDp
-            vector<unsigned char> vchPubKey = ParseHex("02d84d0bb09f1e3e44b3f8c59b66cc93999a4d6e4e75f867e2b8c8b42d9e5c4c65");
+            // Deterministic devnet faucet (Python random seed=42)
+            // Privkey (WIF): cNn958MydGaReKQxS9p17Zn1qjYbPWx5XrPov8i6syALKEtVS4yH
+            // Pubkey (compressed): 02d8019ae39403a4c0b49e98a0be4ed9ad0b1ba20f324fd6268c7455841deddd0d
+            vector<unsigned char> vchPubKey = ParseHex("02d8019ae39403a4c0b49e98a0be4ed9ad0b1ba20f324fd6268c7455841deddd0d");
             txNew.vout[0].SetEmpty();
             txNew.vout[1].scriptPubKey = CScript() << vchPubKey << OP_CHECKSIG;
             txNew.vout[1].nValue = 1000000 * COIN; // 1M IOC for devnet testing

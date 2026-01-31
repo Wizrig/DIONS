@@ -1,8 +1,8 @@
 DIONS 2.0 Complete Devnet E2E Test Report
 ==========================================
-Date: Sat Jan 31 02:40:28 EST 2026
+Date: Sat Jan 31 03:03:43 EST 2026
 Protocol: 60023
-Genesis Prefunding: 1M IOC to mqKqfUYTxDvmfHB3Bd3JBt8NZjVJi1Loom
+Genesis Prefunding: 1M IOC to <will-be-derived-after-import>
 
 RESULTS
 -------

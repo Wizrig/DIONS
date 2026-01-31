@@ -11,8 +11,8 @@ TEST_BASE="$HOME_DIR/ioc-data/dions-devnet-full"
 ARTIFACTS="$PROJECT_ROOT/artifacts/final"
 LOGS="$PROJECT_ROOT/logs"
 
-FAUCET_PRIVKEY="cU3HMLC5rFV83Kq3pCTzLgxTvP86qo2uo8b7HvTfmHDEy6qinGDp"
-FAUCET_ADDR="mqKqfUYTxDvmfHB3Bd3JBt8NZjVJi1Loom"
+FAUCET_PRIVKEY="cNn958MydGaReKQxS9p17Zn1qjYbPWx5XrPov8i6syALKEtVS4yH"
+FAUCET_ADDR="<will-be-derived-after-import>"
 
 log() {
     echo "[$(date +'%H:%M:%S')] $1"
@@ -103,7 +103,7 @@ sleep 15
 
 # Import faucet key on node1
 log "Importing faucet key to node1..."
-IMPORT_RESULT=$(rpc 1 importprivkey "$FAUCET_PRIVKEY" "devnet-faucet" false 2>&1)
+IMPORT_RESULT=$(rpc 1 importprivkey "$FAUCET_PRIVKEY" "devnet-faucet" 2>&1)
 
 if echo "$IMPORT_RESULT" | grep -q "error"; then
     ERROR=$(echo "$IMPORT_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', {}).get('message', 'Unknown'))" 2>/dev/null || echo "Parse error")

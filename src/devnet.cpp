@@ -35,9 +35,9 @@ void Initialize()
     if (pwalletMain != NULL)
     {
         printf("Devnet: Wallet loaded\n");
-        printf("Devnet: Faucet privkey: cU3HMLC5rFV83Kq3pCTzLgxTvP86qo2uo8b7HvTfmHDEy6qinGDp\n");
-        printf("Devnet: Faucet address: mqKqfUYTxDvmfHB3Bd3JBt8NZjVJi1Loom (1M IOC from genesis)\n");
-        printf("Devnet: Import faucet key: iocoind -devnet importprivkey cU3HMLC5rFV83Kq3pCTzLgxTvP86qo2uo8b7HvTfmHDEy6qinGDp\n");
+        printf("Devnet: Faucet privkey: cNn958MydGaReKQxS9p17Zn1qjYbPWx5XrPov8i6syALKEtVS4yH\n");
+        printf("Devnet: Faucet pubkey: 02d8019ae39403a4c0b49e98a0be4ed9ad0b1ba20f324fd6268c7455841deddd0d (1M IOC from genesis)\n");
+        printf("Devnet: Import faucet key: iocoind -devnet importprivkey cNn958MydGaReKQxS9p17Zn1qjYbPWx5XrPov8i6syALKEtVS4yH\n");
         printf("Devnet: Then use 'devfaucet' and 'devstake' for testing\n");
     }
 }
