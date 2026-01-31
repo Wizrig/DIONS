@@ -5,17 +5,46 @@
 
 # Mac OS X makefile for iocoin
 # Originally by Laszlo Hanyecz (solar@heliacal.net)
+# Updated for DIONS 2.0: Homebrew and modern macOS support
 
-CXX=llvm-g++
-DEPSDIR=/opt/local
+# Compiler: Use clang++ (llvm-g++ is obsolete)
+CXX=clang++
+
+# Dependency paths: Prefer Homebrew on Apple Silicon, fallback to MacPorts
+# Override by setting DEPSDIR environment variable
+ifndef DEPSDIR
+  # Detect Homebrew (Apple Silicon: /opt/homebrew, Intel: /usr/local)
+  ifeq ($(shell test -d /opt/homebrew && echo 1), 1)
+    DEPSDIR=/opt/homebrew
+  else ifeq ($(shell test -d /usr/local/opt && echo 1), 1)
+    DEPSDIR=/usr/local
+  else
+    # Fallback to MacPorts
+    DEPSDIR=/opt/local
+  endif
+endif
+
+# OpenSSL paths: Critical for DIONS 2.0 Phase 1
+# Modern macOS does not ship OpenSSL headers, must use Homebrew/MacPorts
+ifndef OPENSSL_PREFIX
+  ifeq ($(shell test -d $(DEPSDIR)/opt/openssl@3 && echo 1), 1)
+    OPENSSL_PREFIX=$(DEPSDIR)/opt/openssl@3
+  else ifeq ($(shell test -d $(DEPSDIR)/opt/openssl@1.1 && echo 1), 1)
+    OPENSSL_PREFIX=$(DEPSDIR)/opt/openssl@1.1
+  else
+    OPENSSL_PREFIX=$(DEPSDIR)
+  endif
+endif
 
 INCLUDEPATHS= \
  -I"$(CURDIR)" \
  -I"$(CURDIR)"/obj \
+ -I"$(OPENSSL_PREFIX)/include" \
  -I"$(DEPSDIR)/include" \
  -I"$(DEPSDIR)/include/db48"
 
 LIBPATHS= \
+ -L"$(OPENSSL_PREFIX)/lib" \
  -L"$(DEPSDIR)/lib" \
  -L"$(DEPSDIR)/lib/db48"
 
@@ -61,6 +90,11 @@ endif
 # ppc doesn't work because we don't support big-endian
 CFLAGS += -Wall -Wextra -Wformat -Wformat-security -Wno-unused-parameter \
     $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS)
+
+# OpenSSL 3.x compatibility: Suppress deprecation warnings
+# Note: openssl_compat.h provides compatibility shims for deprecated APIs
+# We suppress warnings only to allow compilation; behavior remains identical
+CFLAGS += -Wno-deprecated-declarations
 
 OBJS= \
     obj/alert.o \

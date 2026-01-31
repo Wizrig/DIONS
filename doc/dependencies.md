@@ -235,4 +235,196 @@ Breaking Changes:
 
 ---
 
+## macOS Build Instructions (Phase 1)
+
+### Prerequisites
+
+**System Requirements:**
+- macOS 11 (Big Sur) or later
+- Xcode Command Line Tools: `xcode-select --install`
+- Homebrew package manager: https://brew.sh
+
+### Install Dependencies via Homebrew
+
+```bash
+# Install OpenSSL (3.x recommended, 1.1 also supported)
+brew install openssl@3
+
+# Install Berkeley DB 4.8 (CRITICAL: Must be 4.8.x for wallet compatibility)
+# Note: Homebrew removed db@4.8, you may need to:
+# Option 1: Use berkeley-db@4 if available (verify it's 4.8.x)
+brew install berkeley-db@4
+
+# Option 2: Build from source (see manual instructions below)
+# Option 3: Use MacPorts for db48
+
+# Install Boost
+brew install boost
+
+# Install other dependencies
+brew install miniupnpc libevent
+
+# Verify OpenSSL installation
+openssl version
+# Expected: OpenSSL 3.x.x or 1.1.1x
+
+# Check Homebrew paths
+ls /opt/homebrew/opt/openssl@3  # Apple Silicon
+ls /usr/local/opt/openssl@3     # Intel Mac
+```
+
+### Berkeley DB 4.8 Notes (CRITICAL)
+
+**Why 4.8.x is required:**
+- DIONS wallet.dat format is BDB 4.8
+- Upgrading to BDB 5.x or 6.x will make all existing wallets unreadable
+- **DO NOT use BDB 5.x/6.x** unless you have a wallet migration plan
+
+**If Homebrew doesn't provide BDB 4.8:**
+
+```bash
+# Option 1: Use MacPorts
+sudo port install db48
+
+# Option 2: Build from source (advanced)
+wget http://download.oracle.com/berkeley-db/db-4.8.30.tar.gz
+tar -xzvf db-4.8.30.tar.gz
+cd db-4.8.30/build_unix
+../dist/configure --enable-cxx --disable-shared --with-pic --prefix=/usr/local/db-4.8
+make
+sudo make install
+
+# Then set BDB_INCLUDE_PATH and BDB_LIB_PATH when building
+export BDB_INCLUDE_PATH=/usr/local/db-4.8/include
+export BDB_LIB_PATH=/usr/local/db-4.8/lib
+```
+
+### Build IOCoin Daemon
+
+```bash
+# Clone repository
+git clone https://github.com/Wizrig/DIONS
+cd DIONS
+git checkout dions-2.0
+
+# Build iocoind (daemon)
+cd src
+
+# Option 1: Use makefile.osx (auto-detects Homebrew paths)
+make -f makefile.osx
+
+# Option 2: Specify paths manually if auto-detection fails
+make -f makefile.osx \
+  DEPSDIR=/opt/homebrew \
+  OPENSSL_PREFIX=/opt/homebrew/opt/openssl@3
+
+# Option 3: For MacPorts users
+make -f makefile.osx \
+  DEPSDIR=/opt/local \
+  OPENSSL_PREFIX=/opt/local
+
+# Build output
+# Success: ./iocoind binary created
+# Failure: Check error messages for missing dependencies
+```
+
+### Build Verification (Phase 1 Gate)
+
+```bash
+# Test binary exists
+ls -lh iocoind
+# Expected: executable binary, ~5-15MB
+
+# Test binary runs (version check)
+./iocoind --version
+# Expected: IOCoin version info, no crashes
+
+# Test help output
+./iocoind --help
+# Expected: Command-line options displayed
+
+# Optional: Check binary dependencies
+otool -L iocoind | grep -E "ssl|crypto|boost|db"
+# Expected: Links to Homebrew OpenSSL, Boost, BDB
+```
+
+### Common Build Issues
+
+**Issue: OpenSSL not found**
+```bash
+# Solution: Set OPENSSL_PREFIX explicitly
+make -f makefile.osx OPENSSL_PREFIX=/opt/homebrew/opt/openssl@3
+```
+
+**Issue: Berkeley DB not found**
+```bash
+# Solution: Set BDB paths
+export BDB_INCLUDE_PATH=/opt/local/include/db48
+export BDB_LIB_PATH=/opt/local/lib/db48
+make -f makefile.osx
+```
+
+**Issue: Boost not found**
+```bash
+# Solution: Set DEPSDIR
+make -f makefile.osx DEPSDIR=/opt/homebrew
+```
+
+**Issue: Compiler errors about deprecated OpenSSL functions**
+```bash
+# Expected: This should NOT happen with dions-2.0 branch
+# The makefile.osx includes -Wno-deprecated-declarations
+# If you still see errors, verify you're on dions-2.0 branch:
+git status
+git log --oneline -3
+```
+
+### Phase 1 Build Gate (Minimal Success Criteria)
+
+**Required for Phase 1 completion:**
+- [x] `make -f makefile.osx` completes without errors
+- [x] `iocoind` binary is created
+- [x] `./iocoind --version` displays version info without crash
+
+**NOT required for Phase 1:**
+- [ ] Full regtest validation (deferred to Phase 2)
+- [ ] DIONS RPC testing (deferred to Phase 2)
+- [ ] Network sync testing (deferred to Phase 2)
+
+### Next Steps After Phase 1 Build Success
+
+Once the daemon compiles cleanly:
+1. Document build success (compiler version, OS version, dependency versions)
+2. Commit build system changes
+3. Proceed to Phase 2: DIONS feature preservation testing
+
+### Troubleshooting
+
+**Get build environment info:**
+```bash
+# Compiler
+clang++ --version
+
+# macOS version
+sw_vers
+
+# Homebrew info
+brew --prefix
+brew list --versions openssl boost berkeley-db miniupnpc
+
+# Architecture
+uname -m
+# Apple Silicon: arm64
+# Intel: x86_64
+```
+
+**Clean build:**
+```bash
+make -f makefile.osx clean
+rm -f obj/*.o obj/*.P
+make -f makefile.osx
+```
+
+---
+
 **End of Dependency Manifest**
