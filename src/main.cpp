@@ -978,7 +978,10 @@ int CMerkleTx::GetBlocksToMaturity() const
 {
     if (!(IsCoinBase() || IsCoinStake()))
         return 0;
-    return max(0, (nCoinbaseMaturity+10) - GetDepthInMainChain());
+    // Devnet: No extra buffer for instant testing
+    extern bool fDevNet;
+    int nBuffer = fDevNet ? 0 : 10;
+    return max(0, (nCoinbaseMaturity+nBuffer) - GetDepthInMainChain());
 }
 
 
@@ -3003,12 +3006,13 @@ bool LoadBlockIndex(bool fAllowNew)
             txNew.vout.resize(2);  // Empty output + devnet prefund
             // Deterministic devnet faucet (Python random seed=42)
             // Privkey (WIF): cNn958MydGaReKQxS9p17Zn1qjYbPWx5XrPov8i6syALKEtVS4yH
-            // Pubkey (compressed): 02d8019ae39403a4c0b49e98a0be4ed9ad0b1ba20f324fd6268c7455841deddd0d
-            vector<unsigned char> vchPubKey = ParseHex("02d8019ae39403a4c0b49e98a0be4ed9ad0b1ba20f324fd6268c7455841deddd0d");
+            // Address: mqR6e1Q3YxR3AxpiCdMhiVeFmfWcERCZpe
+            // Pubkey hash: 6c95ba311074f8f237573a24b52666e0e0997a07
+            vector<unsigned char> vchPubKeyHash = ParseHex("6c95ba311074f8f237573a24b52666e0e0997a07");
             txNew.vout[0].SetEmpty();
-            txNew.vout[1].scriptPubKey = CScript() << vchPubKey << OP_CHECKSIG;
+            txNew.vout[1].scriptPubKey = CScript() << OP_DUP << OP_HASH160 << vchPubKeyHash << OP_EQUALVERIFY << OP_CHECKSIG;
             txNew.vout[1].nValue = 1000000 * COIN; // 1M IOC for devnet testing
-            printf("DEVNET: Genesis coinbase includes 1M IOC prefund\n");
+            printf("DEVNET: Genesis coinbase includes 1M IOC prefund (P2PKH)\n");
         }
         else
         {

@@ -74,14 +74,14 @@ static const uint256 hashGenesisMerkleRoot("0xcd5029ac01fb6cd7da8ff00ff1e82f3aca
 
 // Devnet has custom genesis (includes prefunded output)
 // Computed at runtime, stored here after first generation
-static uint256 hashGenesisBlockDevNet;
+static uint256 hashGenesisBlockDevNet(0);
 
 inline uint256 GetGenesisHash()
 {
     extern bool fDevNet;
     if (fDevNet && hashGenesisBlockDevNet != 0)
         return hashGenesisBlockDevNet;
-    return (GetGenesisHash());
+    return (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet);
 }
 
 const int SHADE_FEATURE_UPDATE = 75 * 500 + 1860837;

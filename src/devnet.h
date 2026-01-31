@@ -20,7 +20,7 @@ namespace DevNet {
     const int64_t DEVNET_GENESIS_REWARD = 1000000 * 100000000LL; // 1M IOC
 
     // Devnet maturity settings
-    const int DEVNET_COINBASE_MATURITY = 1; // 1 block instead of 100
+    const int DEVNET_COINBASE_MATURITY = 0; // 0 blocks (instant) instead of 100
     const unsigned int DEVNET_STAKE_MIN_AGE = 60; // 1 minute instead of 8 hours
     const int DEVNET_STAKE_MIN_CONFIRMATIONS = 1; // 1 instead of 500
 
