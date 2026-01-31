@@ -5808,14 +5808,32 @@ Value sendPlainMessage(const Array& params, bool fHelp)
     if(!recipientAddr.GetKeyID(rkeyID))
         throw JSONRPCError(RPC_TYPE_ERROR, "recipientAddr does not refer to key");
 
-    CDataStream ss(SER_GETHASH, 0);
-    ss << strMessage;
-
     vector<unsigned char> vchSig;
-    if(!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+    string sigBase64;
+    vector<unsigned char> nonce;
+    bool useV2 = DevNet::IsActive();
 
-    string sigBase64 = EncodeBase64(&vchSig[0], vchSig.size());
+    if (useV2) {
+        // V2: Generate nonce
+        if (!DIONS_V2::GenerateNonce(nonce))
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to generate nonce");
+
+        // V2: Sign version||sender||recipient||nonce||message
+        CDataStream ss(SER_GETHASH, 0);
+        DIONS_V2::BuildSignatureData(ss, myAddress, f, nonce, strMessage);
+
+        if(!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+    } else {
+        // V0: Legacy insecure signature (message only)
+        CDataStream ss(SER_GETHASH, 0);
+        ss << strMessage;
+
+        if(!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+    }
+
+    sigBase64 = EncodeBase64(&vchSig[0], vchSig.size());
 
     __wx__Tx wtx;
     wtx.nVersion = CTransaction::DION_TX_VERSION;
@@ -5823,15 +5841,30 @@ Value sendPlainMessage(const Array& params, bool fHelp)
     CScript scriptPubKeyOrig;
     CScript scriptPubKey;
 
-
-        uint160 hash160;
-        bool isValid = AddressToHash160(f, hash160);
-        if(!isValid)
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid dions address");
-        scriptPubKeyOrig.SetBitcoinAddress(f);
+    uint160 hash160;
+    bool isValid = AddressToHash160(f, hash160);
+    if(!isValid)
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid dions address");
+    scriptPubKeyOrig.SetBitcoinAddress(f);
 
     vchType vchMessage = vchFromString(strMessage);
-    scriptPubKey << OP_MESSAGE << vchFromString(myAddress) << vchFromString(f) << vchMessage << vchFromString(sigBase64) << OP_2DROP << OP_2DROP;
+
+    if (useV2) {
+        // V2 format: OP_MESSAGE <version> <sender> <recipient> <nonce> <message> <sig>
+        string nonceBase64 = EncodeBase64(&nonce[0], nonce.size());
+
+        scriptPubKey << OP_MESSAGE
+                     << vchFromValue((int)DIONS_MSG_VERSION_V2)
+                     << vchFromString(myAddress)
+                     << vchFromString(f)
+                     << vchFromString(nonceBase64)
+                     << vchMessage
+                     << vchFromString(sigBase64)
+                     << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP;
+    } else {
+        // V0 format: OP_MESSAGE <sender> <recipient> <message> <sig>
+        scriptPubKey << OP_MESSAGE << vchFromString(myAddress) << vchFromString(f) << vchMessage << vchFromString(sigBase64) << OP_2DROP << OP_2DROP;
+    }
     scriptPubKey += scriptPubKeyOrig;
 
     ENTER_CRITICAL_SECTION(cs_main)
@@ -6907,36 +6940,88 @@ ConnectInputsPost(map<uint256, CTxIndex>& mapTestPool,
             break;
         case OP_MESSAGE:
         {
-           const std::string sender(vvchArgs[0].begin(), vvchArgs[0].end());
-           const std::string recipient(vvchArgs[1].begin(), vvchArgs[1].end());
-           const std::string message(vvchArgs[2].begin(), vvchArgs[2].end());
-           const std::string sig(stringFromVch(vvchArgs[3]));
+           // Detect v2 format
+           bool isV2 = false;
+           int argOffset = 0;
 
-           cba addr(sender);
+           if (vvchArgs.size() >= 6) {
+               if (vvchArgs[0].size() == 1 && vvchArgs[0][0] == DIONS_MSG_VERSION_V2) {
+                   isV2 = true;
+                   argOffset = 1;
+               }
+           }
 
-           if(!addr.IsValid())
-             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
+           if (isV2) {
+               // V2: <version> <sender> <recipient> <nonce> <message> <sig>
+               const std::string sender(vvchArgs[argOffset].begin(), vvchArgs[argOffset].end());
+               const std::string recipient(vvchArgs[argOffset+1].begin(), vvchArgs[argOffset+1].end());
+               const std::string nonceBase64(stringFromVch(vvchArgs[argOffset+2]));
+               const std::string message(vvchArgs[argOffset+3].begin(), vvchArgs[argOffset+3].end());
+               const std::string sig(stringFromVch(vvchArgs[argOffset+4]));
 
-           CKeyID keyID;
-           if(!addr.GetKeyID(keyID))
-               throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to key");
+               cba addr(sender);
+               if(!addr.IsValid())
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
 
-           bool fInvalid = false;
-          vector<unsigned char> vchSig = DecodeBase64(sig.c_str(), &fInvalid);
+               CKeyID keyID;
+               if(!addr.GetKeyID(keyID))
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to key");
 
-           if(fInvalid)
-               throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed base64 encoding");
+               bool fInvalid = false;
+               vector<unsigned char> vchSig = DecodeBase64(sig.c_str(), &fInvalid);
+               if(fInvalid)
+                   throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed signature");
 
-           CDataStream ss(SER_GETHASH, 0);
-           ss << message;
+               vector<unsigned char> nonce = DecodeBase64(nonceBase64.c_str(), &fInvalid);
+               if(fInvalid || nonce.size() != V2_NONCE_SIZE)
+                   throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed nonce");
 
-           CKey key;
-           if(!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
-               return false;
+               // Anti-replay check
+               uint256 msgHash = Hash(vvchArgs[argOffset+3].begin(), vvchArgs[argOffset+3].end());
+               if (!DIONS_V2::CheckReplay(msgHash))
+                   return error("V2 plain message replay detected");
 
-           if(key.GetPubKey().GetID() != keyID)
-           {
-                return error("encrypted message tx verification failed");
+               // Verify signature over: version||sender||recipient||nonce||message
+               CDataStream ss(SER_GETHASH, 0);
+               DIONS_V2::BuildSignatureData(ss, sender, recipient, nonce, message);
+
+               CKey key;
+               if(!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
+                   return false;
+
+               if(key.GetPubKey().GetID() != keyID)
+                   return error("V2 plain message signature verification failed");
+           } else {
+               // V0: <sender> <recipient> <message> <sig>
+               const std::string sender(vvchArgs[0].begin(), vvchArgs[0].end());
+               const std::string recipient(vvchArgs[1].begin(), vvchArgs[1].end());
+               const std::string message(vvchArgs[2].begin(), vvchArgs[2].end());
+               const std::string sig(stringFromVch(vvchArgs[3]));
+
+               cba addr(sender);
+               if(!addr.IsValid())
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
+
+               CKeyID keyID;
+               if(!addr.GetKeyID(keyID))
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to key");
+
+               bool fInvalid = false;
+               vector<unsigned char> vchSig = DecodeBase64(sig.c_str(), &fInvalid);
+
+               if(fInvalid)
+                   throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed base64 encoding");
+
+               // V0: Legacy insecure signature (message only)
+               CDataStream ss(SER_GETHASH, 0);
+               ss << message;
+
+               CKey key;
+               if(!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
+                   return false;
+
+               if(key.GetPubKey().GetID() != keyID)
+                   return error("encrypted message tx verification failed");
            }
         }
             break;
