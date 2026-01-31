@@ -18,6 +18,7 @@
 #include <openssl/crypto.h>
 
 #include "main.h"
+#include "devnet.h"
 
 #ifndef WIN32
 #include <signal.h>
@@ -406,6 +407,14 @@ bool AppInit2()
     fTestNet = GetBoolArg("-testnet");
     if (fTestNet) {
         SoftSetBoolArg("-irc", true);
+    }
+
+    // Devnet mode (PoS-friendly automated testing)
+    fDevNet = GetBoolArg("-devnet");
+    if (fDevNet) {
+        printf("DEVNET MODE ENABLED\n");
+        fTestNet = true; // Devnet implies testnet settings
+        SoftSetBoolArg("-listen", true);
     }
 
     fViewWallet = GetBoolArg("-viewwallet");
@@ -863,6 +872,9 @@ bool AppInit2()
     printf(" wallet      %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 
     RegisterWallet(pwalletMain);
+
+    // Initialize devnet after wallet is loaded
+    DevNet::Initialize();
 
     if(GetBoolArg("-xscan"))
     {

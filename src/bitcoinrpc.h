@@ -170,7 +170,11 @@ extern json_spirit::Value tmpTest(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getworkex(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getblocktemplate(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value submitblock(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value testgenerate(const json_spirit::Array& params, bool fHelp);
+
+// Devnet RPCs (in rpcdevnet.cpp)
+extern json_spirit::Value devfaucet(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value devstake(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value devtime(const json_spirit::Array& params, bool fHelp);
 
 extern json_spirit::Value getnewaddress(const json_spirit::Array& params, bool fHelp); // in rpcwallet.cpp
 extern json_spirit::Value xtu_url(const json_spirit::Array& params, bool fHelp);
