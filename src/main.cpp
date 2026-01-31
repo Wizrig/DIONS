@@ -3085,6 +3085,27 @@ bool LoadBlockIndex(bool fAllowNew)
         if (!block.AddToBlockIndex(nFile, nBlockPos, GetGenesisHash()))
             return error("LoadBlockIndex() : genesis block not accepted");
 
+        // Devnet: Index genesis coinbase UTXO for spending
+        if (fDevNet && block.vtx.size() > 0 && block.vtx[0].vout.size() > 1)
+        {
+            // Calculate transaction offset within block (same logic as ConnectBlock)
+            unsigned int nTxPos = nBlockPos + ::GetSerializeSize(CBlock(), SER_DISK, CLIENT_VERSION)
+                                  - (2 * GetSizeOfCompactSize(0)) + GetSizeOfCompactSize(block.vtx.size());
+
+            CTxIndex txindex(CDiskTxPos(nFile, nBlockPos, nTxPos), block.vtx[0].vout.size());
+            // Mark first output as spent (empty output), second as unspent (1M IOC)
+            txindex.vSpent[0].SetNull();
+            txindex.vSpent[1].SetNull();
+
+            if (!txdb.TxnBegin())
+                return error("LoadBlockIndex() : TxnBegin failed");
+            if (!txdb.UpdateTxIndex(block.vtx[0].GetHash(), txindex))
+                return error("LoadBlockIndex() : UpdateTxIndex genesis failed");
+            if (!txdb.TxnCommit())
+                return error("LoadBlockIndex() : TxnCommit genesis failed");
+            printf("DEVNET: Indexed genesis coinbase UTXO (nTxPos=%u)\n", nTxPos);
+        }
+
         // ppcoin: initialize synchronized checkpoint
         if (!Checkpoints::WriteSyncCheckpoint(GetGenesisHash()))
             return error("LoadBlockIndex() : failed to init sync checkpoint");
