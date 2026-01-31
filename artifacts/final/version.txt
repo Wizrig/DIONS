@@ -1,0 +1,1 @@
+I/OCoin: Cannot obtain a lock on data directory /Users/taino/Library/Application Support/IOCoin.  I/OCoin is probably already running.

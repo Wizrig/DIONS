@@ -1,0 +1,222 @@
+DIONS 2.0 Security Backlog
+===========================
+
+Status: Queued for future implementation
+Priority: Post-validation hardening
+Phase: DIONS 2.1 Security Hardening
+
+MESSAGING SECURITY (Highest Risk)
+----------------------------------
+1. Replace non-crypto RNG in messaging
+   - Status: QUEUED
+   - Issue: Any use of rand() or time-seeded RNG in message encryption
+   - Fix: Use OpenSSL CSPRNG exclusively (RAND_bytes)
+   - Files: src/dions.cpp, messaging paths
+
+2. Add integrity/authentication (AEAD or Encrypt-then-MAC)
+   - Status: QUEUED
+   - Issue: Encryption without authentication allows tampering
+   - Fix: Implement AES-GCM (AEAD) or explicit HMAC-then-encrypt
+   - Files: Message encryption/decryption functions
+
+3. Bind sender+recipient+metadata into signatures
+   - Status: QUEUED
+   - Issue: Message signature may not bind all critical context
+   - Fix: Sign (sender_pubkey || recipient_pubkey || timestamp || message_hash)
+   - Files: Message signing/verification code
+
+4. Add anti-replay semantics
+   - Status: QUEUED
+   - Issue: Duplicate messages may be accepted
+   - Fix: Nonce/timestamp/sequence tracking, reject duplicates
+   - Files: Message validation, wallet DB schema
+
+5. Enforce hard caps for message payload sizes
+   - Status: QUEUED
+   - Issue: Large payloads could cause DoS
+   - Fix: MAX_MESSAGE_SIZE constant, reject oversized before processing
+   - Files: RPC handlers, message parsing
+
+6. Deterministic parsing + strict validation
+   - Status: QUEUED
+   - Issue: Lenient parsing may accept malformed data
+   - Fix: Strict base64/IV/ciphertext/signature validation with size checks
+   - Files: Message deserialization code
+
+7. Key lifecycle rules
+   - Status: QUEUED
+   - Issue: No key rotation or expiry mechanism
+   - Fix: Key versioning, expiry metadata, per-contact keys (if feasible)
+   - Files: RSA key management, wallet schema
+
+8. Constant-time comparisons for MAC/tags
+   - Status: QUEUED
+   - Issue: Timing attacks on MAC verification
+   - Fix: Use CRYPTO_memcmp or constant-time comparison
+   - Files: MAC verification paths
+
+ALIAS/IDENTITY SECURITY
+------------------------
+9. Domain separation for alias signatures
+   - Status: QUEUED
+   - Issue: Signature reuse across operations
+   - Fix: Include operation type in signed data (REGISTER vs UPDATE vs TRANSFER)
+   - Files: Alias transaction creation/validation
+
+10. Bind explicit transfer intent
+    - Status: QUEUED
+    - Issue: Transfer signature ambiguity
+    - Fix: Sign (old_owner || new_owner || alias_id || tx_context)
+    - Files: transferAlias implementation
+
+11. Strict validation for alias op args
+    - Status: QUEUED
+    - Issue: Lenient parsing of alias operations
+    - Fix: Validate opcodes, lengths, charset, encoding strictly
+    - Files: Alias script parsing, OP_ALIAS validation
+
+12. Anti-squatting/spam economics
+    - Status: QUEUED
+    - Issue: Cheap alias registration enables squatting
+    - Fix: Policy-level fees, rate limits, proof-of-burn requirements
+    - Files: Alias registration consensus rules
+
+RSA/KEY STORAGE SECURITY
+-------------------------
+13. Reduce RSA private key exposure in memory
+    - Status: QUEUED
+    - Issue: Private keys may linger in memory
+    - Fix: Explicit buffer wiping after use (OPENSSL_cleanse)
+    - Files: Key generation, encryption/decryption paths
+
+14. Ensure RSA private material encrypted at rest
+    - Status: QUEUED
+    - Issue: Unencrypted RSA keys in wallet.dat
+    - Fix: Integrate with wallet encryption, verify RSA keys are encrypted
+    - Files: Wallet encryption, key storage
+
+15. Validate RSA key sizes/formats
+    - Status: QUEUED
+    - Issue: Weak or malformed RSA keys may be accepted
+    - Fix: Enforce minimum 2048-bit (preferably 4096-bit), validate PEM format
+    - Files: publicKey RPC, key import/validation
+
+SHADE SECURITY
+--------------
+16. CSPRNG for ephemeral keys/derivation
+    - Status: QUEUED
+    - Issue: Shade ephemeral key generation randomness source
+    - Fix: Use RAND_bytes for all ephemeral key material
+    - Files: Shade key derivation, stealth address generation
+
+17. Strict validation of OP_RETURN ephemeral pubkey
+    - Status: QUEUED
+    - Issue: Malformed ephemeral pubkeys could cause crashes
+    - Fix: Validate curve membership, encoding, length, point validity
+    - Files: Shade output parsing, wallet scanning
+
+18. Scan DoS controls
+    - Status: QUEUED
+    - Issue: Unbounded scanning per block causes resource exhaustion
+    - Fix: Cap scans per block, caching, early exits on invalid data
+    - Files: Shade wallet scanning loop
+
+19. False-positive prevention
+    - Status: QUEUED
+    - Issue: Wallet claiming unspendable outputs
+    - Fix: Verify output is actually spendable before claiming
+    - Files: Shade output detection, balance calculation
+
+FILE/COMPRESSED PAYLOAD SECURITY
+---------------------------------
+20. Decompression bomb protections
+    - Status: QUEUED
+    - Issue: Malicious compressed data expands excessively
+    - Fix: Cap decompressed size, compression ratio, recursion depth
+    - Files: Any decompression code (if present in DIONS)
+
+21. Attachment chunking rules
+    - Status: QUEUED
+    - Issue: Attachment handling may lack size/order/integrity checks
+    - Fix: Max chunk size, total chunks, sequence validation, chunk hashes
+    - Files: File attachment handling (if implemented)
+
+CONSENSUS/MEMPOOL/RELAY SAFETY
+-------------------------------
+22. Explicit limits for all DIONS payload fields
+    - Status: QUEUED
+    - Issue: Unbounded field sizes in consensus
+    - Fix: Define MAX_ALIAS_LENGTH, MAX_MESSAGE_SIZE, etc. in consensus
+    - Files: Consensus validation code, main.cpp
+
+23. Early reject oversized/invalid before expensive crypto
+    - Status: QUEUED
+    - Issue: DoS via expensive validation of invalid data
+    - Fix: Cheap size/format checks before signature verification
+    - Files: Transaction validation, mempool acceptance
+
+24. DoS scoring for repeated malformed DIONS patterns
+    - Status: QUEUED
+    - Issue: Repeated invalid DIONS transactions from peer
+    - Fix: Misbehavior scoring for malformed DIONS data
+    - Files: Peer misbehavior tracking
+
+GENERAL CRYPTO HARDENING
+-------------------------
+25. Centralize crypto primitives
+    - Status: QUEUED
+    - Issue: Duplicated crypto code, inconsistent usage
+    - Fix: Single crypto.cpp/crypto.h with all primitives, remove duplicates
+    - Files: Consolidate from util.cpp, dions.cpp, key.cpp
+
+26. Version crypto formats
+    - Status: QUEUED
+    - Issue: No versioning for future crypto migrations
+    - Fix: Add version byte to all encrypted/signed blobs
+    - Files: All encryption/signature serialization
+
+OPERATIONAL DISCIPLINE
+----------------------
+27. Backward-compat plan
+    - Status: QUEUED
+    - Issue: Security fixes may break old data
+    - Fix: Version detection, migration path, compatibility layer
+    - Files: Wallet loading, alias/message parsing
+
+28. Threat model + security policy docs
+    - Status: QUEUED
+    - Issue: No documented threat model or security assumptions
+    - Fix: Create docs/THREAT_MODEL.txt, docs/SECURITY_POLICY.txt
+    - Files: Documentation
+
+29. Security logging without leaking secrets
+    - Status: QUEUED
+    - Issue: Debug logs may expose private keys or sensitive data
+    - Fix: Audit all logging, redact private material, add security event log
+    - Files: All debug logging calls
+
+IMPLEMENTATION GUIDELINES
+--------------------------
+- Each fix must be gated behind version check or feature flag
+- Maintain backward compatibility with existing on-chain data
+- Test migration path for wallets with old format data
+- No consensus changes without careful review and activation logic
+- Prioritize fixes that can be done without breaking existing functionality
+- Document security assumptions and threat model for each component
+
+PRIORITIZATION (Recommended Order)
+-----------------------------------
+Phase 1 (Critical, No Consensus Change):
+- Items 1, 2, 5, 8, 13, 14, 15, 16, 22, 23, 25
+
+Phase 2 (Important, May Require Soft Fork):
+- Items 3, 4, 6, 9, 10, 11, 17, 18, 19, 24
+
+Phase 3 (Defense in Depth):
+- Items 7, 12, 20, 21, 26, 27, 28, 29
+
+REVIEW STATUS
+-------------
+Backlog created: 2026-01-31
+Next review: After DIONS 2.0 validation complete
+Owner: Development team

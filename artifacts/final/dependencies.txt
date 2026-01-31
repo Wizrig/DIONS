@@ -1,0 +1,8 @@
+	/opt/homebrew/opt/boost/lib/libboost_filesystem.dylib (compatibility version 0.0.0, current version 0.0.0)
+	/opt/homebrew/opt/boost/lib/libboost_iostreams.dylib (compatibility version 0.0.0, current version 0.0.0)
+	/opt/homebrew/opt/boost/lib/libboost_serialization.dylib (compatibility version 0.0.0, current version 0.0.0)
+	/opt/homebrew/opt/boost/lib/libboost_program_options.dylib (compatibility version 0.0.0, current version 0.0.0)
+	/opt/homebrew/opt/boost/lib/libboost_thread.dylib (compatibility version 0.0.0, current version 0.0.0)
+	/opt/homebrew/opt/boost/lib/libboost_chrono.dylib (compatibility version 0.0.0, current version 0.0.0)
+	/opt/homebrew/opt/openssl@3/lib/libssl.3.dylib (compatibility version 3.0.0, current version 3.0.0)
+	/opt/homebrew/opt/openssl@3/lib/libcrypto.3.dylib (compatibility version 3.0.0, current version 3.0.0)

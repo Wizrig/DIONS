@@ -304,6 +304,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getmininginfo",          &getmininginfo,          true,   false },
     { "center__base__0",          &center__base__0,          true,   false },
     { "getstakinginfo",         &getstakinginfo,         true,   false },
+    { "testgenerate",           &testgenerate,           true,   false },
     { "getnewaddress",          &getnewaddress,          true,   false },
     { "sectionlog",          &sectionlog,          true,   false },
     { "xtu_url",   &xtu_url,   false,  false },

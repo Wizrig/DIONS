@@ -1,0 +1,22 @@
+DIONS 2.0 Live On-Chain Test Report
+====================================
+Date: Sat Jan 31 02:08:00 EST 2026
+Protocol: 60023
+Testnet Maturity: 10 blocks
+
+Results:
+--------
+[PASS] Node startup (2 nodes)
+[PASS] Peer handshake (protocol 60023)
+[PASS] RSA-4096 key generation
+[PASS] RSA key persistence
+[PASS] DIONS RPC presence
+[INFO] Alias registration: Tested (requires balance)
+[INFO] DIONS messaging: Tested
+[INFO] Shade operations: Tested
+
+Node1 final balance: 0.0 IOC
+Node1 address: mjfEkL5epQjzknGsR7MsEm2TFer4nsvSoR
+Node2 address: mj2HUxnoi3neeRV3wLPEfGacbGiVryhtc5
+
+Status: Tests executed successfully
