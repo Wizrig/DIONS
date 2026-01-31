@@ -136,9 +136,14 @@ bool BackupWallet(const __wx__& wallet, const string& strDest)
                     pathDest /= wallet.strWalletFile;
 
                 try {
-#if BOOST_VERSION >= 104000
+#if BOOST_VERSION >= 107400
+                    // Modern Boost: copy_options enum class with overwrite_existing
+                    fs::copy_file(pathSrc, pathDest, fs::copy_options::overwrite_existing);
+#elif BOOST_VERSION >= 104000
+                    // Mid-era Boost: copy_option with overwrite_if_exists
                     fs::copy_file(pathSrc, pathDest, fs::copy_option::overwrite_if_exists);
 #else
+                    // Legacy Boost: no copy options
                     fs::copy_file(pathSrc, pathDest);
 #endif
                     printf("copied wallet.dat to %s\n", pathDest.string().c_str());

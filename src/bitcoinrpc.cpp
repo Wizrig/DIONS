@@ -35,6 +35,62 @@ using namespace json_spirit;
 // Namespace alias to avoid ambiguity with std::filesystem (C++17)
 namespace fs = boost::filesystem;
 
+//
+// Boost.Asio compatibility helpers for modern Boost versions
+//
+#include <boost/version.hpp>
+
+// Helper: Check if IPv6 address is v4-compatible or v4-mapped
+inline bool asio_ipv6_is_v4_compat_or_mapped(const boost::asio::ip::address_v6& addr)
+{
+#if BOOST_VERSION >= 106600
+    // Modern Boost: is_v4_compatible removed, use is_v4_mapped only
+    return addr.is_v4_mapped();
+#else
+    // Legacy Boost: both methods available
+    return addr.is_v4_compatible() || addr.is_v4_mapped();
+#endif
+}
+
+// Helper: Extract IPv4 address from v4-mapped IPv6 address
+inline boost::asio::ip::address_v4 asio_ipv6_to_v4(const boost::asio::ip::address_v6& addr)
+{
+#if BOOST_VERSION >= 106600
+    // Modern Boost: construct v4 from bytes
+    auto bytes = addr.to_bytes();
+    return boost::asio::ip::address_v4(
+        ((uint32_t)bytes[12] << 24) |
+        ((uint32_t)bytes[13] << 16) |
+        ((uint32_t)bytes[14] << 8) |
+        ((uint32_t)bytes[15])
+    );
+#else
+    // Legacy Boost: to_v4() available
+    return addr.to_v4();
+#endif
+}
+
+// Helper: Convert IPv4 address to unsigned long
+inline uint32_t asio_ipv4_to_uint(const boost::asio::ip::address_v4& addr)
+{
+#if BOOST_VERSION >= 106600
+    // Modern Boost: to_ulong removed, use to_uint
+    return addr.to_uint();
+#else
+    // Legacy Boost: to_ulong available
+    return addr.to_ulong();
+#endif
+}
+
+// Helper: Socket listen backlog constant
+#if BOOST_VERSION >= 106600
+    // Modern Boost: max_connections renamed to max_listen_connections
+    #define ASIO_MAX_LISTEN_BACKLOG boost::asio::socket_base::max_listen_connections
+#else
+    // Legacy Boost: max_connections
+    #define ASIO_MAX_LISTEN_BACKLOG boost::asio::ASIO_MAX_LISTEN_BACKLOG
+#endif
+
 void ThreadRPCServer2(void* parg);
 
 static std::string strRPCUserColonPass;
@@ -641,16 +697,14 @@ void ErrorReply(std::ostream& stream, const Object& objError, const Value& id)
 bool ClientAllowed(const boost::asio::ip::address& address)
 {
     // Make sure that IPv4-compatible and IPv4-mapped IPv6 addresses are treated as IPv4 addresses
-    if (address.is_v6()
-     && (address.to_v6().is_v4_compatible()
-      || address.to_v6().is_v4_mapped()))
-        return ClientAllowed(address.to_v6().to_v4());
+    if (address.is_v6() && asio_ipv6_is_v4_compat_or_mapped(address.to_v6()))
+        return ClientAllowed(asio_ipv6_to_v4(address.to_v6()));
 
     if (address == asio::ip::address_v4::loopback()
      || address == asio::ip::address_v6::loopback()
      || (address.is_v4()
          // Check whether IPv4 addresses match 127.0.0.0/8 (loopback subnet)
-      && (address.to_v4().to_ulong() & 0xff000000) == 0x7f000000))
+      && (asio_ipv4_to_uint(address.to_v4()) & 0xff000000) == 0x7f000000))
         return true;
 
     const string strAddress = address.to_string();
@@ -694,6 +748,23 @@ public:
     bool connect(const std::string& server, const std::string& port)
     {
         ip::tcp::resolver resolver(stream.get_executor());
+#if BOOST_VERSION >= 106600
+        // Modern Boost.Asio: resolver.resolve returns results_type, no query type
+        boost::system::error_code resolve_error;
+        auto results = resolver.resolve(server, port, resolve_error);
+        if (resolve_error)
+            return false;
+        boost::system::error_code error = asio::error::host_not_found;
+        for (const auto& endpoint : results)
+        {
+            stream.lowest_layer().close();
+            stream.lowest_layer().connect(endpoint, error);
+            if (!error)
+                return true;
+        }
+        return false;
+#else
+        // Legacy Boost.Asio: resolver::query and iterator API
         ip::tcp::resolver::query query(server.c_str(), port.c_str());
         ip::tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
         ip::tcp::resolver::iterator end;
@@ -706,6 +777,7 @@ public:
         if (error)
             return false;
         return true;
+#endif
     }
 
 private:
@@ -935,7 +1007,7 @@ void ThreadRPCServer2(void* parg)
         acceptor->set_option(boost::asio::ip::v6_only(loopback), v6_only_error);
 
         acceptor->bind(endpoint);
-        acceptor->listen(socket_base::max_connections);
+        acceptor->listen(ASIO_MAX_LISTEN_BACKLOG);
 
         RPCListen(acceptor, io_context, context, fUseSSL);
         // Cancel outstanding listen-requests for this acceptor when shutting down
@@ -961,7 +1033,7 @@ void ThreadRPCServer2(void* parg)
             acceptor->open(endpoint.protocol());
             acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
             acceptor->bind(endpoint);
-            acceptor->listen(socket_base::max_connections);
+            acceptor->listen(ASIO_MAX_LISTEN_BACKLOG);
 
             RPCListen(acceptor, io_context, context, fUseSSL);
             // Cancel outstanding listen-requests for this acceptor when shutting down

@@ -55,24 +55,29 @@ LIBS= -dead_strip
 
 ifdef STATIC
 # Build STATIC if you are redistributing the iocoind binary
+# Modern Homebrew Boost: libraries don't have -mt suffix
 LIBS += \
  $(DEPSDIR)/lib/db48/libdb_cxx-4.8.a \
- $(DEPSDIR)/lib/libboost_system-mt.a \
- $(DEPSDIR)/lib/libboost_filesystem-mt.a \
- $(DEPSDIR)/lib/libboost_iostreams-mt.a \
- $(DEPSDIR)/lib/libboost_serialization-mt.a \
- $(DEPSDIR)/lib/libboost_program_options-mt.a \
- $(DEPSDIR)/lib/libboost_thread-mt.a \
+ $(DEPSDIR)/lib/libboost_system.a \
+ $(DEPSDIR)/lib/libboost_filesystem.a \
+ $(DEPSDIR)/lib/libboost_iostreams.a \
+ $(DEPSDIR)/lib/libboost_serialization.a \
+ $(DEPSDIR)/lib/libboost_program_options.a \
+ $(DEPSDIR)/lib/libboost_thread.a \
  $(DEPSDIR)/lib/libssl.a \
  $(DEPSDIR)/lib/libcrypto.a \
  -lz
 else
+# Modern Homebrew Boost: libraries don't have -mt suffix
+# Note: boost_system is header-only in modern Boost, no library needed
 LIBS += \
  -ldb_cxx-4.8 \
- -lboost_system-mt \
- -lboost_filesystem-mt \
- -lboost_program_options-mt \
- -lboost_thread-mt \
+ -lboost_filesystem \
+ -lboost_iostreams \
+ -lboost_serialization \
+ -lboost_program_options \
+ -lboost_thread \
+ -lboost_chrono \
  -lssl \
  -lcrypto \
  -lz
@@ -161,7 +166,8 @@ OBJS= \
 
 all: iocoind
 
-LIBS += $(CURDIR)/leveldb/libleveldb.a $(CURDIR)/leveldb/libmemenv.a
+# Modern LevelDB includes memenv in libleveldb.a
+LIBS += $(CURDIR)/leveldb/libleveldb.a
 DEFS += $(addprefix -I,$(CURDIR)/leveldb/include)
 DEFS += $(addprefix -I,$(CURDIR)/leveldb/helpers)
 OBJS += obj/txdb-leveldb.o
