@@ -80,40 +80,38 @@ Value devstake(const Array& params, bool fHelp)
 
     for (int i = 0; i < nBlocks; i++)
     {
-        // Try to create stake block
-        int64_t nFees = 0;
-        unique_ptr<CBlock> pblock(CreateNewBlock(pwalletMain, true, &nFees));
+        // CRITICAL: Advance mocktime BEFORE each staking attempt
+        // This ensures nSearchTime > nLastCoinStakeSearchTime in SignBlock
+        // Use 120 seconds to ensure we're past the static init time
+        SetMockTime(GetTime() + 120);
 
-        if (!pblock.get())
+        int64_t nFees = 0;
+        unique_ptr<CBlock> pblock;
+
+        // Retry loop: try up to 10 times per block, advancing time each attempt
+        for (int retry = 0; retry < 10; retry++)
         {
-            // If can't stake, advance time and try again
-            SetMockTime(GetTime() + 60); // Advance 1 minute
+            if (retry > 0)
+                SetMockTime(GetTime() + 120); // Advance more for retry
+
             pblock.reset(CreateNewBlock(pwalletMain, true, &nFees));
 
-            if (!pblock.get())
-            {
-                // Still can't stake, might need more mature coins
-                throw runtime_error(strprintf(
-                    "Failed to create stake block %d (may need more mature coins or stake weight)", i + 1));
-            }
+            if (pblock.get())
+                break; // Successfully created block template
         }
+
+        if (!pblock.get())
+            throw runtime_error(strprintf("Failed to create stake block %d after retries", i + 1));
 
         // Sign the stake block
         if (!pblock->SignBlock(*pwalletMain, nFees))
-        {
             throw runtime_error(strprintf("Failed to sign block %d", i + 1));
-        }
 
         // Process the block
         if (!ProcessBlock(NULL, pblock.get()))
-        {
             throw runtime_error(strprintf("ProcessBlock failed for block %d", i + 1));
-        }
 
         blockHashes.push_back(pblock->GetHash().GetHex());
-
-        // Advance time for next block
-        SetMockTime(GetTime() + 61); // Slightly more than min age
     }
 
     return blockHashes;
@@ -145,3 +143,4 @@ Value devtime(const Array& params, bool fHelp)
 
     return result;
 }
+

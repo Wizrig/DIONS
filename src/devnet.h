@@ -21,8 +21,8 @@ namespace DevNet {
 
     // Devnet maturity settings
     const int DEVNET_COINBASE_MATURITY = 0; // 0 blocks (instant) instead of 100
-    const unsigned int DEVNET_STAKE_MIN_AGE = 60; // 1 minute instead of 8 hours
-    const int DEVNET_STAKE_MIN_CONFIRMATIONS = 1; // 1 instead of 500
+    const unsigned int DEVNET_STAKE_MIN_AGE = 0; // 0 seconds (instant) instead of 8 hours
+    const int DEVNET_STAKE_MIN_CONFIRMATIONS = 0; // 0 instead of 500
 
     // Initialize devnet (called from init.cpp)
     void Initialize();

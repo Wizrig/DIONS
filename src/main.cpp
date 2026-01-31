@@ -2791,15 +2791,21 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 // novacoin: attempt to generate suitable proof-of-stake
 bool CBlock::SignBlock(__wx__& wallet, int64_t nFees)
 {
+    extern bool fDevNet;
+
     // if we are trying to sign
     //    something except proof-of-stake block template
     if (!vtx[0].vout[0].IsEmpty())
+    {
         return false;
+    }
 
     // if we are trying to sign
     //    a complete proof-of-stake block
     if (IsProofOfStake())
+    {
         return true;
+    }
 
     static int64_t nLastCoinStakeSearchTime = GetAdjustedTime(); // startup timestamp
 
@@ -2810,9 +2816,14 @@ bool CBlock::SignBlock(__wx__& wallet, int64_t nFees)
 
     int64_t nSearchTime = txCoinStake.nTime; // search to current time
 
+    // DEVNET: Force time check to pass by resetting search time for early blocks
+    if (fDevNet && nBestHeight < 100)
+        nLastCoinStakeSearchTime = nSearchTime - 1;
+
     if (nSearchTime > nLastCoinStakeSearchTime)
     {
         int64_t nSearchInterval = IsProtocolV2(nBestHeight+1) ? 1 : nSearchTime - nLastCoinStakeSearchTime;
+
         if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key, pindexBest->nHeight+1))
         {
             if (txCoinStake.nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)))

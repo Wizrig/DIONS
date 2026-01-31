@@ -115,26 +115,24 @@ fi
 # Rescan for genesis funding
 sleep 3
 
+# Generate initial blocks to establish blockchain (best effort)
+log "Attempting to generate initial PoS blocks..."
+STAKE_RESULT=$(rpc 1 devstake 2 2>&1 || echo "FAIL")
+
+STAKE_ERROR=$(echo "$STAKE_RESULT" | python3 -c "import sys,json; data=json.load(sys.stdin); print('yes' if data.get('error') else 'no')" 2>/dev/null || echo "yes")
+
+if [ "$STAKE_RESULT" != "FAIL" ] && [ "$STAKE_ERROR" = "no" ]; then
+    BLOCK_COUNT=$(rpc 1 getblockcount 2>&1 | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])" 2>/dev/null || echo "0")
+    log "✅ Generated blocks (current height: $BLOCK_COUNT)"
+    sleep 3
+else
+    ERROR=$(echo "$STAKE_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', {}).get('message', 'Unknown'))" 2>/dev/null || echo "$STAKE_RESULT")
+    log "⚠️  devstake: $ERROR (continuing anyway for devfaucet testing)"
+fi
+
 # Check faucet balance
 BAL_FAUCET=$(rpc 1 getbalance 2>&1 | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])" 2>/dev/null || echo "0")
 log "Faucet balance: $BAL_FAUCET IOC"
-
-if ! python3 -c "import sys; sys.exit(0 if float('$BAL_FAUCET') >= 1000.0 else 1)" 2>/dev/null; then
-    log "⚠️  Faucet balance low, attempting to advance blockchain..."
-
-    # Try to stake a block to mature the genesis coins
-    STAKE_RESULT=$(rpc 1 devstake 2 2>&1 || echo "FAIL")
-
-    if [ "$STAKE_RESULT" != "FAIL" ] && ! echo "$STAKE_RESULT" | grep -q "error"; then
-        log "✅ Generated blocks via devstake"
-        sleep 5
-        BAL_FAUCET=$(rpc 1 getbalance 2>&1 | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])" 2>/dev/null || echo "0")
-        log "Faucet balance after staking: $BAL_FAUCET IOC"
-    else
-        ERROR=$(echo "$STAKE_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', {}).get('message', 'Unknown'))" 2>/dev/null || echo "$STAKE_RESULT")
-        log "⚠️  devstake: $ERROR"
-    fi
-fi
 
 # Generate test addresses
 log ""
@@ -173,24 +171,45 @@ if python3 -c "import sys; sys.exit(0 if float('$BAL_FAUCET') >= 100.0 else 1)" 
 
         FUND_TX=$(rpc 1 devfaucet "$ADDR_VAL" 50 2>&1 || echo "FAIL")
 
-        if [ "$FUND_TX" != "FAIL" ] && ! echo "$FUND_TX" | grep -q "error"; then
+        # Check if JSON contains actual error (not just "error":null)
+        HAS_ERROR=$(echo "$FUND_TX" | python3 -c "import sys,json; data=json.load(sys.stdin); print('yes' if data.get('error') else 'no')" 2>/dev/null || echo "yes")
+
+        if [ "$FUND_TX" != "FAIL" ] && [ "$HAS_ERROR" = "no" ]; then
             TX_ID=$(echo "$FUND_TX" | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])" 2>/dev/null || echo "N/A")
             log "✅ Funded node$i: 50 IOC (TX: ${TX_ID:0:16}...)"
+
+            # Generate blocks to confirm this transaction
+            log "  Confirming transaction with devstake..."
+            STAKE_CONFIRM=$(rpc 1 devstake 2 2>&1 || echo "FAIL")
+
+            STAKE_ERROR=$(echo "$STAKE_CONFIRM" | python3 -c "import sys,json; data=json.load(sys.stdin); print('yes' if data.get('error') else 'no')" 2>/dev/null || echo "yes")
+
+            if [ "$STAKE_CONFIRM" != "FAIL" ] && [ "$STAKE_ERROR" = "no" ]; then
+                log "  ✅ Generated 2 confirmation blocks"
+
+                # Poll for confirmation on recipient node
+                for retry in {1..10}; do
+                    sleep 2
+                    BAL_CHECK=$(rpc $i getbalance 2>&1 | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])" 2>/dev/null || echo "0")
+
+                    if python3 -c "import sys; sys.exit(0 if float('$BAL_CHECK') > 0 else 1)" 2>/dev/null; then
+                        log "  ✅ Node$i confirmed balance: $BAL_CHECK IOC"
+                        break
+                    fi
+
+                    if [ $retry -eq 10 ]; then
+                        log "  ⚠️  Node$i balance still 0 after 10 retries"
+                    fi
+                done
+            else
+                ERROR=$(echo "$STAKE_CONFIRM" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', {}).get('message', 'Unknown'))" 2>/dev/null || echo "$STAKE_CONFIRM")
+                log "  ⚠️  devstake: $ERROR"
+            fi
         else
             ERROR=$(echo "$FUND_TX" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', {}).get('message', 'Unknown'))" 2>/dev/null || echo "$FUND_TX")
             log "⚠️  devfaucet node$i: $ERROR"
         fi
     done
-
-    # Generate blocks to confirm transactions
-    sleep 3
-    STAKE_CONFIRM=$(rpc 1 devstake 3 2>&1 || echo "FAIL")
-
-    if [ "$STAKE_CONFIRM" != "FAIL" ] && ! echo "$STAKE_CONFIRM" | grep -q "error"; then
-        log "✅ Generated 3 confirmation blocks"
-    fi
-
-    sleep 5
 else
     log "⚠️  SKIP funding (faucet balance: $BAL_FAUCET < 100)"
 fi
