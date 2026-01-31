@@ -4,6 +4,7 @@
 
 #include <map>
 
+#include "openssl_compat.h"
 #include <openssl/ecdsa.h>
 #include <openssl/obj_mac.h>
 
