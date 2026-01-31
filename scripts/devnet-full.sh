@@ -64,15 +64,15 @@ listen=1
 staking=1
 EOF
 
-    # Peer connections
+    # Peer connections (node1=48003, node2=48005, node3=48007)
     if [ $i -ne 1 ]; then
-        echo "addnode=127.0.0.1:48001" >> "$DATADIR/iocoin.conf"
-    fi
-    if [ $i -ne 2 ]; then
         echo "addnode=127.0.0.1:48003" >> "$DATADIR/iocoin.conf"
     fi
-    if [ $i -ne 3 ]; then
+    if [ $i -ne 2 ]; then
         echo "addnode=127.0.0.1:48005" >> "$DATADIR/iocoin.conf"
+    fi
+    if [ $i -ne 3 ]; then
+        echo "addnode=127.0.0.1:48007" >> "$DATADIR/iocoin.conf"
     fi
 done
 
@@ -127,7 +127,7 @@ if [ "$STAKE_RESULT" != "FAIL" ] && [ "$STAKE_ERROR" = "no" ]; then
     sleep 3
 else
     ERROR=$(echo "$STAKE_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', {}).get('message', 'Unknown'))" 2>/dev/null || echo "$STAKE_RESULT")
-    log "⚠️  devstake: $ERROR (continuing anyway for devfaucet testing)"
+    fail "Initial devstake failed: $ERROR"
 fi
 
 # Check faucet balance
@@ -187,9 +187,12 @@ if python3 -c "import sys; sys.exit(0 if float('$BAL_FAUCET') >= 100.0 else 1)" 
             if [ "$STAKE_CONFIRM" != "FAIL" ] && [ "$STAKE_ERROR" = "no" ]; then
                 log "  ✅ Generated 2 confirmation blocks"
 
+                # Wait for block propagation across mesh
+                sleep 5
+
                 # Poll for confirmation on recipient node
-                for retry in {1..10}; do
-                    sleep 2
+                for retry in {1..15}; do
+                    sleep 3
                     BAL_CHECK=$(rpc $i getbalance 2>&1 | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])" 2>/dev/null || echo "0")
 
                     if python3 -c "import sys; sys.exit(0 if float('$BAL_CHECK') > 0 else 1)" 2>/dev/null; then
@@ -197,13 +200,15 @@ if python3 -c "import sys; sys.exit(0 if float('$BAL_FAUCET') >= 100.0 else 1)" 
                         break
                     fi
 
-                    if [ $retry -eq 10 ]; then
-                        log "  ⚠️  Node$i balance still 0 after 10 retries"
+                    if [ $retry -eq 15 ]; then
+                        log "  ⚠️  Node$i balance still 0 after 15 retries"
+                        fail "Node$i funding confirmation failed - balance never updated"
                     fi
                 done
             else
                 ERROR=$(echo "$STAKE_CONFIRM" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', {}).get('message', 'Unknown'))" 2>/dev/null || echo "$STAKE_CONFIRM")
                 log "  ⚠️  devstake: $ERROR"
+                fail "devstake failed to confirm transaction for node$i"
             fi
         else
             ERROR=$(echo "$FUND_TX" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error', {}).get('message', 'Unknown'))" 2>/dev/null || echo "$FUND_TX")
