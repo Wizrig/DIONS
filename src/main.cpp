@@ -24,6 +24,7 @@ using namespace boost;
 namespace fs = boost::filesystem;
 
 #include "dions.h"
+#include "devnet.h"
 //
 // Global state
 //
@@ -2139,7 +2140,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     if (!txdb.TxnBegin())
         return error("SetBestChain() : TxnBegin failed");
 
-    if (pindexGenesisBlock == NULL && hash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+    if (pindexGenesisBlock == NULL && hash == GetGenesisHash())
     {
         txdb.WriteHashBestChain(hash);
         if (!txdb.TxnCommit())
@@ -2995,9 +2996,26 @@ bool LoadBlockIndex(bool fAllowNew)
         CTransaction txNew;
         txNew.nTime = 1406153471;
         txNew.vin.resize(1);
-        txNew.vout.resize(1);
+
+        // Devnet: Modify coinbase to include prefunded output
+        if (fDevNet)
+        {
+            txNew.vout.resize(2);  // Empty output + devnet prefund
+            // Deterministic devnet address: mqKqfUYTxDvmfHB3Bd3JBt8NZjVJi1Loom
+            // Privkey: cU3HMLC5rFV83Kq3pCTzLgxTvP86qo2uo8b7HvTfmHDEy6qinGDp
+            vector<unsigned char> vchPubKey = ParseHex("02d84d0bb09f1e3e44b3f8c59b66cc93999a4d6e4e75f867e2b8c8b42d9e5c4c65");
+            txNew.vout[0].SetEmpty();
+            txNew.vout[1].scriptPubKey = CScript() << vchPubKey << OP_CHECKSIG;
+            txNew.vout[1].nValue = 1000000 * COIN; // 1M IOC for devnet testing
+            printf("DEVNET: Genesis coinbase includes 1M IOC prefund\n");
+        }
+        else
+        {
+            txNew.vout.resize(1);
+            txNew.vout[0].SetEmpty();
+        }
+
         txNew.vin[0].scriptSig = CScript() << 0 << CBigNum(42) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
-        txNew.vout[0].SetEmpty();
         CBlock block;
         block.vtx.push_back(txNew);
         block.hashPrevBlock = 0;
@@ -3039,9 +3057,19 @@ bool LoadBlockIndex(bool fAllowNew)
                 block.nNonce   = !fTestNet ? 306504 : 0;
 
         //// debug print
-        assert(block.hashMerkleRoot == hashGenesisMerkleRoot);
+        if (!fDevNet)
+        {
+            assert(block.hashMerkleRoot == hashGenesisMerkleRoot);
+            assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+        }
+        else
+        {
+            // Store devnet genesis hash for later comparisons
+            hashGenesisBlockDevNet = block.GetHash();
+            printf("DEVNET: Custom genesis (merkle: %s)\n", block.hashMerkleRoot.ToString().c_str());
+            printf("DEVNET: Genesis hash: %s\n", hashGenesisBlockDevNet.ToString().c_str());
+        }
         block.print();
-        assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
         assert(block.CheckBlock());
 
         // Start new block file
@@ -3049,11 +3077,11 @@ bool LoadBlockIndex(bool fAllowNew)
         unsigned int nBlockPos;
         if (!block.WriteToDisk(nFile, nBlockPos))
             return error("LoadBlockIndex() : writing genesis block to disk failed");
-        if (!block.AddToBlockIndex(nFile, nBlockPos, hashGenesisBlock))
+        if (!block.AddToBlockIndex(nFile, nBlockPos, GetGenesisHash()))
             return error("LoadBlockIndex() : genesis block not accepted");
 
         // ppcoin: initialize synchronized checkpoint
-        if (!Checkpoints::WriteSyncCheckpoint((!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)))
+        if (!Checkpoints::WriteSyncCheckpoint(GetGenesisHash()))
             return error("LoadBlockIndex() : failed to init sync checkpoint");
     }
 

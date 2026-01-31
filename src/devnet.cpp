@@ -6,6 +6,7 @@
 #include "main.h"
 #include "wallet.h"
 #include "init.h"
+#include "base58.h"
 
 bool fDevNet = false;
 
@@ -30,11 +31,14 @@ void Initialize()
     nStakeMinAge = DEVNET_STAKE_MIN_AGE;
     nStakeMinConfirmations = DEVNET_STAKE_MIN_CONFIRMATIONS;
 
-    // In devnet, wallet will be auto-funded via genesis block
-    // or via dev faucet RPC commands
+    // Devnet faucet address (funded via genesis)
     if (pwalletMain != NULL)
     {
-        printf("Devnet: Wallet loaded, use 'devfaucet' RPC to fund addresses\n");
+        printf("Devnet: Wallet loaded\n");
+        printf("Devnet: Faucet privkey: cU3HMLC5rFV83Kq3pCTzLgxTvP86qo2uo8b7HvTfmHDEy6qinGDp\n");
+        printf("Devnet: Faucet address: mqKqfUYTxDvmfHB3Bd3JBt8NZjVJi1Loom (1M IOC from genesis)\n");
+        printf("Devnet: Import faucet key: iocoind -devnet importprivkey cU3HMLC5rFV83Kq3pCTzLgxTvP86qo2uo8b7HvTfmHDEy6qinGDp\n");
+        printf("Devnet: Then use 'devfaucet' and 'devstake' for testing\n");
     }
 }
 
