@@ -11,6 +11,9 @@
 #include "bitcoinrpc.h"
 #include "main.h"
 #include "state.h"
+#include "devnet.h"
+#include <openssl/hmac.h>
+#include <openssl/rand.h>
 #include "json/json_spirit_reader_template.h"
 #include "json/json_spirit_writer_template.h"
 #include "json/json_spirit_utils.h"
@@ -44,6 +47,17 @@ std::map<vchType, uint256> mapMyMessages;
 std::map<vchType, uint256> mapLocator;
 std::map<vchType, set<uint256> > mapState;
 std::map<vchType, set<uint256> > k1Export;
+
+// DEVNET: V2 Message Security (anti-replay tracking)
+namespace {
+    CCriticalSection cs_v2_replay;
+    std::set<uint256> setV2MessageHashes GUARDED_BY(cs_v2_replay);
+
+    const unsigned char DIONS_MSG_VERSION_V2 = 0x02;
+    const size_t V2_NONCE_SIZE = 8;
+    const size_t V2_MAC_SIZE = 32; // HMAC-SHA256
+    const size_t V2_MAX_PAYLOAD_SIZE = 65536; // 64KB limit
+}
 
 void xsc(CBlockIndex*);
 static bool vclose(string&,string&);
@@ -5273,6 +5287,56 @@ Value updateAlias(const Array& params, bool fHelp)
     return wtx.GetHash().GetHex();
 }
 
+// DEVNET: V2 Message Security Helpers
+namespace DIONS_V2 {
+    // Generate secure random nonce
+    bool GenerateNonce(vector<unsigned char>& nonce) {
+        nonce.resize(V2_NONCE_SIZE);
+        return RAND_bytes(&nonce[0], V2_NONCE_SIZE) == 1;
+    }
+
+    // Compute HMAC-SHA256
+    void ComputeMAC(const vector<unsigned char>& key,
+                    const string& data,
+                    vector<unsigned char>& mac) {
+        mac.resize(V2_MAC_SIZE);
+        HMAC(EVP_sha256(), &key[0], key.size(),
+             (const unsigned char*)data.data(), data.size(),
+             &mac[0], NULL);
+    }
+
+    // Verify HMAC-SHA256
+    bool VerifyMAC(const vector<unsigned char>& key,
+                   const string& data,
+                   const vector<unsigned char>& mac) {
+        if (mac.size() != V2_MAC_SIZE) return false;
+        vector<unsigned char> computed;
+        ComputeMAC(key, data, computed);
+        return memcmp(&mac[0], &computed[0], V2_MAC_SIZE) == 0;
+    }
+
+    // Check and record message hash for anti-replay
+    bool CheckReplay(const uint256& msgHash) {
+        LOCK(cs_v2_replay);
+        if (setV2MessageHashes.count(msgHash))
+            return false; // Replay detected
+        setV2MessageHashes.insert(msgHash);
+        return true;
+    }
+
+    // Create v2 signature data: version || sender || recipient || nonce || payload
+    void BuildSignatureData(CDataStream& ss,
+                           const string& sender,
+                           const string& recipient,
+                           const vector<unsigned char>& nonce,
+                           const string& payload) {
+        ss << DIONS_MSG_VERSION_V2;
+        ss << sender;
+        ss << recipient;
+        ss << nonce;
+        ss << payload;
+    }
+}
 
 Value publicKey(const Array& params, bool fHelp)
 {
@@ -5860,14 +5924,37 @@ Value sendMessage(const Array& params, bool fHelp)
     string iv128Base64;
     EncryptMessageAES(strMessage, encrypted, aesRawVector, iv128Base64);
 
-    CDataStream ss(SER_GETHASH, 0);
-    ss << encrypted + iv128Base64;
-
     vector<unsigned char> vchSig;
-    if(!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+    string sigBase64;
+    vector<unsigned char> nonce;
+    vector<unsigned char> mac;
+    bool useV2 = DevNet::IsActive();
 
-    string sigBase64 = EncodeBase64(&vchSig[0], vchSig.size());
+    if (useV2) {
+        // V2: Generate nonce
+        if (!DIONS_V2::GenerateNonce(nonce))
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to generate nonce");
+
+        // V2: Compute MAC over ciphertext+IV
+        DIONS_V2::ComputeMAC(aesRawVector, encrypted + iv128Base64, mac);
+
+        // V2: Sign version||sender||recipient||nonce||encrypted||iv||mac
+        CDataStream ss(SER_GETHASH, 0);
+        DIONS_V2::BuildSignatureData(ss, myAddress, f, nonce, encrypted + iv128Base64);
+        ss << mac;
+
+        if(!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+    } else {
+        // V0: Legacy insecure signature (payload only)
+        CDataStream ss(SER_GETHASH, 0);
+        ss << encrypted + iv128Base64;
+
+        if(!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
+    }
+
+    sigBase64 = EncodeBase64(&vchSig[0], vchSig.size());
 
     __wx__Tx wtx;
     wtx.nVersion = CTransaction::DION_TX_VERSION;
@@ -5883,7 +5970,26 @@ Value sendMessage(const Array& params, bool fHelp)
 
     vchType vchEncryptedMessage = vchFromString(encrypted);
     vchType iv128Base64Vch = vchFromString(iv128Base64);
-    scriptPubKey << OP_ENCRYPTED_MESSAGE << vchFromString(myAddress) << vchFromString(f) << vchEncryptedMessage << iv128Base64Vch << vchFromString(sigBase64) << OP_2DROP << OP_2DROP << OP_DROP;
+
+    if (useV2) {
+        // V2 format: OP_ENCRYPTED_MESSAGE <version> <sender> <recipient> <nonce> <encrypted> <iv> <mac> <sig>
+        string nonceBase64 = EncodeBase64(&nonce[0], nonce.size());
+        string macBase64 = EncodeBase64(&mac[0], mac.size());
+
+        scriptPubKey << OP_ENCRYPTED_MESSAGE
+                     << vchFromValue((int)DIONS_MSG_VERSION_V2)
+                     << vchFromString(myAddress)
+                     << vchFromString(f)
+                     << vchFromString(nonceBase64)
+                     << vchEncryptedMessage
+                     << iv128Base64Vch
+                     << vchFromString(macBase64)
+                     << vchFromString(sigBase64)
+                     << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP;
+    } else {
+        // V0 format: OP_ENCRYPTED_MESSAGE <sender> <recipient> <encrypted> <iv> <sig>
+        scriptPubKey << OP_ENCRYPTED_MESSAGE << vchFromString(myAddress) << vchFromString(f) << vchEncryptedMessage << iv128Base64Vch << vchFromString(sigBase64) << OP_2DROP << OP_2DROP << OP_DROP;
+    }
     scriptPubKey += scriptPubKeyOrig;
 
     ENTER_CRITICAL_SECTION(cs_main)
@@ -6702,37 +6808,100 @@ ConnectInputsPost(map<uint256, CTxIndex>& mapTestPool,
         case OP_ENCRYPTED_MESSAGE:
         case OP_MAP_PROJECT:
         {
-           const std::string sender(vvchArgs[0].begin(), vvchArgs[0].end());
-           const std::string recipient(vvchArgs[1].begin(), vvchArgs[1].end());
-           const std::string encrypted(vvchArgs[2].begin(), vvchArgs[2].end());
-           const std::string iv128Base64(stringFromVch(vvchArgs[3]));
-           const std::string sig(stringFromVch(vvchArgs[4]));
+           // Detect v2 format: vvchArgs[0] is version byte
+           bool isV2 = false;
+           int argOffset = 0;
 
-           cba addr(sender);
+           if (vvchArgs.size() >= 8) {
+               // Check if first arg is version byte 0x02
+               if (vvchArgs[0].size() == 1 && vvchArgs[0][0] == DIONS_MSG_VERSION_V2) {
+                   isV2 = true;
+                   argOffset = 1;
+               }
+           }
 
-           if(!addr.IsValid())
-             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
+           if (isV2) {
+               // V2: <version> <sender> <recipient> <nonce> <encrypted> <iv> <mac> <sig>
+               const std::string sender(vvchArgs[argOffset].begin(), vvchArgs[argOffset].end());
+               const std::string recipient(vvchArgs[argOffset+1].begin(), vvchArgs[argOffset+1].end());
+               const std::string nonceBase64(stringFromVch(vvchArgs[argOffset+2]));
+               const std::string encrypted(vvchArgs[argOffset+3].begin(), vvchArgs[argOffset+3].end());
+               const std::string iv128Base64(stringFromVch(vvchArgs[argOffset+4]));
+               const std::string macBase64(stringFromVch(vvchArgs[argOffset+5]));
+               const std::string sig(stringFromVch(vvchArgs[argOffset+6]));
 
-           CKeyID keyID;
-           if(!addr.GetKeyID(keyID))
-               throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to key");
+               cba addr(sender);
+               if(!addr.IsValid())
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
 
-           bool fInvalid = false;
-          vector<unsigned char> vchSig = DecodeBase64(sig.c_str(), &fInvalid);
+               CKeyID keyID;
+               if(!addr.GetKeyID(keyID))
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to key");
 
-           if(fInvalid)
-               throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed base64 encoding");
+               // Decode all fields
+               bool fInvalid = false;
+               vector<unsigned char> vchSig = DecodeBase64(sig.c_str(), &fInvalid);
+               if(fInvalid)
+                   throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed signature");
 
-           CDataStream ss(SER_GETHASH, 0);
-           ss << encrypted + iv128Base64;
+               vector<unsigned char> nonce = DecodeBase64(nonceBase64.c_str(), &fInvalid);
+               if(fInvalid || nonce.size() != V2_NONCE_SIZE)
+                   throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed nonce");
 
-           CKey key;
-           if(!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
-               return false;
+               vector<unsigned char> mac = DecodeBase64(macBase64.c_str(), &fInvalid);
+               if(fInvalid || mac.size() != V2_MAC_SIZE)
+                   throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed MAC");
 
-           if(key.GetPubKey().GetID() != keyID)
-           {
-                return error("encrypted message tx verification failed");
+               // Anti-replay check
+               uint256 msgHash = Hash(vvchArgs[argOffset+3].begin(), vvchArgs[argOffset+3].end());
+               if (!DIONS_V2::CheckReplay(msgHash))
+                   return error("V2 encrypted message replay detected");
+
+               // Verify signature over: version||sender||recipient||nonce||encrypted||iv||mac
+               CDataStream ss(SER_GETHASH, 0);
+               DIONS_V2::BuildSignatureData(ss, sender, recipient, nonce, encrypted + iv128Base64);
+               ss << mac;
+
+               CKey key;
+               if(!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
+                   return false;
+
+               if(key.GetPubKey().GetID() != keyID)
+                   return error("V2 encrypted message signature verification failed");
+
+               // Note: MAC verification would require AES key, done at decryption time
+           } else {
+               // V0: <sender> <recipient> <encrypted> <iv> <sig>
+               const std::string sender(vvchArgs[0].begin(), vvchArgs[0].end());
+               const std::string recipient(vvchArgs[1].begin(), vvchArgs[1].end());
+               const std::string encrypted(vvchArgs[2].begin(), vvchArgs[2].end());
+               const std::string iv128Base64(stringFromVch(vvchArgs[3]));
+               const std::string sig(stringFromVch(vvchArgs[4]));
+
+               cba addr(sender);
+               if(!addr.IsValid())
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
+
+               CKeyID keyID;
+               if(!addr.GetKeyID(keyID))
+                   throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to key");
+
+               bool fInvalid = false;
+               vector<unsigned char> vchSig = DecodeBase64(sig.c_str(), &fInvalid);
+
+               if(fInvalid)
+                   throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed base64 encoding");
+
+               // V0: Legacy insecure signature (payload only)
+               CDataStream ss(SER_GETHASH, 0);
+               ss << encrypted + iv128Base64;
+
+               CKey key;
+               if(!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
+                   return false;
+
+               if(key.GetPubKey().GetID() != keyID)
+                   return error("encrypted message tx verification failed");
            }
         }
             break;
