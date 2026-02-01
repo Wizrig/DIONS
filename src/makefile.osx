@@ -141,6 +141,8 @@ OBJS= \
     obj/rpcnet.o \
     obj/rpcmining.o \
     obj/rpcwallet.o \
+    obj/rpcdevnet.o \
+    obj/devnet.o \
     obj/rpcblockchain.o \
     obj/rpcrawtransaction.o \
     obj/script.o \

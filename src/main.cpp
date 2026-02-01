@@ -24,6 +24,7 @@ using namespace boost;
 namespace fs = boost::filesystem;
 
 #include "dions.h"
+#include "devnet.h"
 //
 // Global state
 //
@@ -977,7 +978,10 @@ int CMerkleTx::GetBlocksToMaturity() const
 {
     if (!(IsCoinBase() || IsCoinStake()))
         return 0;
-    return max(0, (nCoinbaseMaturity+10) - GetDepthInMainChain());
+    // Devnet: No extra buffer for instant testing
+    extern bool fDevNet;
+    int nBuffer = fDevNet ? 0 : 10;
+    return max(0, (nCoinbaseMaturity+nBuffer) - GetDepthInMainChain());
 }
 
 
@@ -2139,7 +2143,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     if (!txdb.TxnBegin())
         return error("SetBestChain() : TxnBegin failed");
 
-    if (pindexGenesisBlock == NULL && hash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+    if (pindexGenesisBlock == NULL && hash == GetGenesisHash())
     {
         txdb.WriteHashBestChain(hash);
         if (!txdb.TxnCommit())
@@ -2787,15 +2791,21 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 // novacoin: attempt to generate suitable proof-of-stake
 bool CBlock::SignBlock(__wx__& wallet, int64_t nFees)
 {
+    extern bool fDevNet;
+
     // if we are trying to sign
     //    something except proof-of-stake block template
     if (!vtx[0].vout[0].IsEmpty())
+    {
         return false;
+    }
 
     // if we are trying to sign
     //    a complete proof-of-stake block
     if (IsProofOfStake())
+    {
         return true;
+    }
 
     static int64_t nLastCoinStakeSearchTime = GetAdjustedTime(); // startup timestamp
 
@@ -2806,9 +2816,14 @@ bool CBlock::SignBlock(__wx__& wallet, int64_t nFees)
 
     int64_t nSearchTime = txCoinStake.nTime; // search to current time
 
+    // DEVNET: Force time check to pass by resetting search time for early blocks
+    if (fDevNet && nBestHeight < 100)
+        nLastCoinStakeSearchTime = nSearchTime - 1;
+
     if (nSearchTime > nLastCoinStakeSearchTime)
     {
         int64_t nSearchInterval = IsProtocolV2(nBestHeight+1) ? 1 : nSearchTime - nLastCoinStakeSearchTime;
+
         if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key, pindexBest->nHeight+1))
         {
             if (txCoinStake.nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)))
@@ -2995,9 +3010,28 @@ bool LoadBlockIndex(bool fAllowNew)
         CTransaction txNew;
         txNew.nTime = 1406153471;
         txNew.vin.resize(1);
-        txNew.vout.resize(1);
+
+        // Devnet: Modify coinbase to include prefunded output
+        if (fDevNet)
+        {
+            txNew.vout.resize(2);  // Empty output + devnet prefund
+            // Deterministic devnet faucet (Python random seed=42)
+            // Privkey (WIF): cNn958MydGaReKQxS9p17Zn1qjYbPWx5XrPov8i6syALKEtVS4yH
+            // Address: mqR6e1Q3YxR3AxpiCdMhiVeFmfWcERCZpe
+            // Pubkey hash: 6c95ba311074f8f237573a24b52666e0e0997a07
+            vector<unsigned char> vchPubKeyHash = ParseHex("6c95ba311074f8f237573a24b52666e0e0997a07");
+            txNew.vout[0].SetEmpty();
+            txNew.vout[1].scriptPubKey = CScript() << OP_DUP << OP_HASH160 << vchPubKeyHash << OP_EQUALVERIFY << OP_CHECKSIG;
+            txNew.vout[1].nValue = 1000000 * COIN; // 1M IOC for devnet testing
+            printf("DEVNET: Genesis coinbase includes 1M IOC prefund (P2PKH)\n");
+        }
+        else
+        {
+            txNew.vout.resize(1);
+            txNew.vout[0].SetEmpty();
+        }
+
         txNew.vin[0].scriptSig = CScript() << 0 << CBigNum(42) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
-        txNew.vout[0].SetEmpty();
         CBlock block;
         block.vtx.push_back(txNew);
         block.hashPrevBlock = 0;
@@ -3039,9 +3073,19 @@ bool LoadBlockIndex(bool fAllowNew)
                 block.nNonce   = !fTestNet ? 306504 : 0;
 
         //// debug print
-        assert(block.hashMerkleRoot == hashGenesisMerkleRoot);
+        if (!fDevNet)
+        {
+            assert(block.hashMerkleRoot == hashGenesisMerkleRoot);
+            assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+        }
+        else
+        {
+            // Store devnet genesis hash for later comparisons
+            hashGenesisBlockDevNet = block.GetHash();
+            printf("DEVNET: Custom genesis (merkle: %s)\n", block.hashMerkleRoot.ToString().c_str());
+            printf("DEVNET: Genesis hash: %s\n", hashGenesisBlockDevNet.ToString().c_str());
+        }
         block.print();
-        assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
         assert(block.CheckBlock());
 
         // Start new block file
@@ -3049,11 +3093,32 @@ bool LoadBlockIndex(bool fAllowNew)
         unsigned int nBlockPos;
         if (!block.WriteToDisk(nFile, nBlockPos))
             return error("LoadBlockIndex() : writing genesis block to disk failed");
-        if (!block.AddToBlockIndex(nFile, nBlockPos, hashGenesisBlock))
+        if (!block.AddToBlockIndex(nFile, nBlockPos, GetGenesisHash()))
             return error("LoadBlockIndex() : genesis block not accepted");
 
+        // Devnet: Index genesis coinbase UTXO for spending
+        if (fDevNet && block.vtx.size() > 0 && block.vtx[0].vout.size() > 1)
+        {
+            // Calculate transaction offset within block (same logic as ConnectBlock)
+            unsigned int nTxPos = nBlockPos + ::GetSerializeSize(CBlock(), SER_DISK, CLIENT_VERSION)
+                                  - (2 * GetSizeOfCompactSize(0)) + GetSizeOfCompactSize(block.vtx.size());
+
+            CTxIndex txindex(CDiskTxPos(nFile, nBlockPos, nTxPos), block.vtx[0].vout.size());
+            // Mark first output as spent (empty output), second as unspent (1M IOC)
+            txindex.vSpent[0].SetNull();
+            txindex.vSpent[1].SetNull();
+
+            if (!txdb.TxnBegin())
+                return error("LoadBlockIndex() : TxnBegin failed");
+            if (!txdb.UpdateTxIndex(block.vtx[0].GetHash(), txindex))
+                return error("LoadBlockIndex() : UpdateTxIndex genesis failed");
+            if (!txdb.TxnCommit())
+                return error("LoadBlockIndex() : TxnCommit genesis failed");
+            printf("DEVNET: Indexed genesis coinbase UTXO (nTxPos=%u)\n", nTxPos);
+        }
+
         // ppcoin: initialize synchronized checkpoint
-        if (!Checkpoints::WriteSyncCheckpoint((!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)))
+        if (!Checkpoints::WriteSyncCheckpoint(GetGenesisHash()))
             return error("LoadBlockIndex() : failed to init sync checkpoint");
     }
 

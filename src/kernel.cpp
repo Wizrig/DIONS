@@ -7,6 +7,7 @@
 
 #include "kernel.h"
 #include "txdb.h"
+#include "devnet.h"
 
 using namespace std;
 
@@ -214,6 +215,22 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
     if (!mapBlockIndex.count(hashBlockFrom))
         return error("GetKernelStakeModifier() : block not indexed");
     const CBlockIndex* pindexFrom = mapBlockIndex[hashBlockFrom];
+
+    // DEVNET-ONLY: Bootstrap stake modifier for genesis/early blocks
+    // At height 0 or when no blockchain history exists, set modifier to 0 to allow PoS staking
+    if (DevNet::IsActive())
+    {
+        const CBlockIndex* pindexPrev = pindexFrom->pprev;
+
+        // Trigger conditions: no history exists (genesis or block 1)
+        if (pindexPrev == NULL || pindexPrev->pprev == NULL || pindexPrev->nHeight == 0)
+        {
+            nStakeModifier = 0;
+            nStakeModifierHeight = pindexFrom->nHeight;
+            nStakeModifierTime = pindexPrev ? pindexPrev->GetBlockTime() : 0;
+            return true;
+        }
+    }
     nStakeModifierHeight = pindexFrom->nHeight;
     nStakeModifierTime = pindexFrom->GetBlockTime();
     int64_t nStakeModifierSelectionInterval = GetStakeModifierSelectionInterval();
@@ -406,7 +423,14 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 
 bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, uint256& targetProofOfStake, bool fPrintProofOfStake)
 {
-   
+    // DEVNET: Always succeed for deterministic block generation
+    if (DevNet::IsActive())
+    {
+        hashProofOfStake = 0;
+        targetProofOfStake = CBigNum().SetCompact(nBits).getuint256();
+        return true;
+    }
+
     if (V3(nBestHeight) || IsProtocolV2(pindexPrev->nHeight+1))
     {
       return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake);
@@ -419,7 +443,14 @@ bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBl
 
 bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, int64_t nTime, const COutPoint& prevout, int64_t* pBlockTime)
 {
-  
+    // DEVNET: Always succeed for deterministic block generation
+    if (DevNet::IsActive())
+    {
+        if (pBlockTime)
+            *pBlockTime = nTime;
+        return true;
+    }
+
     uint256 hashProofOfStake;
     uint256 targetProofOfStake;
 
@@ -511,7 +542,14 @@ bool CheckCoinStakeTimestamp(int nHeight, int64_t nTimeBlock, int64_t nTimeTx)
 // Get stake modifier checksum
 unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
 {
-    assert (pindex->pprev || pindex->GetBlockHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+    // DEVNET: Allow block 1 (first PoS block after genesis)
+    if (DevNet::IsActive() && pindex->nHeight <= 1)
+    {
+        // For genesis or block 1, return simple checksum
+        return 0;
+    }
+
+    assert (pindex->pprev || pindex->GetBlockHash() == GetGenesisHash());
     // Hash previous checksum with flags, hashProofOfStake and nStakeModifier
     CDataStream ss(SER_GETHASH, 0);
     if (pindex->pprev)

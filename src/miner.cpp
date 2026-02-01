@@ -138,6 +138,14 @@ CBlock* CreateNewBlock(__wx__* pwallet, bool fProofOfStake, int64_t* pFees)
     {
         // Height first in coinbase required for block.version=2
         txNew.vin[0].scriptSig = (CScript() << nHeight) + COINBASE_FLAGS;
+
+        // DEVNET: Ensure minimum 2-byte scriptSig (required by CheckTransaction)
+        extern bool fDevNet;
+        if (fDevNet && txNew.vin[0].scriptSig.size() < 2)
+        {
+            txNew.vin[0].scriptSig << OP_0; // Pad to meet minimum size
+        }
+
         assert(txNew.vin[0].scriptSig.size() <= 100);
 
         txNew.vout[0].SetEmpty();

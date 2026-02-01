@@ -72,6 +72,18 @@ static const uint256 hashGenesisBlock("0x00000afad2d5833b50b59a9784fdc59869b6886
 static const uint256 hashGenesisBlockTestNet("5f97300cd3dc3d2215dd38ce6d99bf7d5984bb62b2777060d3b5564298bd5484");
 static const uint256 hashGenesisMerkleRoot("0xcd5029ac01fb6cd7da8ff00ff1e82f3aca6bf3ecce5fb60623ee807fa83d1795");
 
+// Devnet has custom genesis (includes prefunded output)
+// Computed at runtime, stored here after first generation
+static uint256 hashGenesisBlockDevNet(0);
+
+inline uint256 GetGenesisHash()
+{
+    extern bool fDevNet;
+    if (fDevNet && hashGenesisBlockDevNet != 0)
+        return hashGenesisBlockDevNet;
+    return (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet);
+}
+
 const int SHADE_FEATURE_UPDATE = 75 * 500 + 1860837;
  const int BASELINE_LOCK = 0x00ff0;      
 const int BLOCK_REWARD_HALVING = 0x2dc6c0;
@@ -1548,7 +1560,7 @@ public:
             if (vHave.size() > 10)
                 nStep *= 2;
         }
-        vHave.push_back((!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+        vHave.push_back((GetGenesisHash()));
     }
 
     int GetDistanceBack()
@@ -1601,7 +1613,7 @@ public:
                     return hash;
             }
         }
-        return (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet);
+        return (GetGenesisHash());
     }
 
     int GetHeight()

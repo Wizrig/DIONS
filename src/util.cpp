@@ -194,17 +194,13 @@ int decrypt(unsigned char* ciphertext, int ciphertext_len, unsigned char* key,
 
 bool EncryptMessageAES(const string& message, string& encryptedMsg, vector<unsigned char>& key, string& iv128Base64)
 {
-#ifdef WIN32
-  srand(time(NULL));
-#else
-  srandom(time(NULL));
-#endif
-
+  // SECURITY FIX: Use cryptographically secure random number generator
+  // Previous code used predictable rand() seeded with time(NULL)
   int LEN=16;
-  vector<unsigned char> iv128;
-  for(int i=0; i<LEN; i++)
+  vector<unsigned char> iv128(LEN);
+  if (RAND_bytes(&iv128[0], LEN) != 1)
   {
-    iv128.push_back((unsigned char)(rand() % 255 + 1));
+    return false; // Cryptographic RNG failure
   }
 
   unsigned char* key256_array = &key[0];
@@ -328,15 +324,15 @@ bool DecryptMessage(const string& rsaPrivKey, const string& encrypted, string& d
 
 void GenerateAESKey(vchType& aesKey)
 {
-  #ifdef WIN32
-    srand(time(NULL));
-  #else
-    srandom(time(NULL));
-  #endif
+  // SECURITY FIX: Use cryptographically secure random number generator
+  // Previous code used predictable rand() seeded with time(NULL)
   int LEN=32;
-  for(int i=0; i<LEN; i++)
+  aesKey.resize(LEN);
+  if (RAND_bytes(&aesKey[0], LEN) != 1)
   {
-    aesKey.push_back((unsigned char)(rand() % 255 + 1));
+    // Critical: Crypto RNG failure - clear output and throw
+    aesKey.clear();
+    throw runtime_error("RAND_bytes() failed - cannot generate AES key");
   }
 }
 
