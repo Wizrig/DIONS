@@ -794,8 +794,14 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
         }
 
         // Check for non-standard pay-to-script-hash in inputs
-        if (!tx.AreInputsStandard(mapInputs)) 
+        if (!tx.AreInputsStandard(mapInputs))
           return error("AcceptToMemoryPool : nonstandard transaction input");
+
+        // Reject transactions with excessive sigops including P2SH before expensive validation
+        unsigned int nSigOps = tx.GetLegacySigOpCount();
+        nSigOps += tx.GetP2SHSigOpCount(mapInputs);
+        if (nSigOps > MAX_BLOCK_SIGOPS / 5)
+            return error("AcceptToMemoryPool : too many sigops");
 
         int64_t nFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
         unsigned int nSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
