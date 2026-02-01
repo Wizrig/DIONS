@@ -56,7 +56,7 @@ namespace {
     const unsigned char DIONS_MSG_VERSION_V2 = 0x02;
     const size_t V2_NONCE_SIZE = 8;
     const size_t V2_MAC_SIZE = 32; // HMAC-SHA256
-    const size_t V2_MAX_PAYLOAD_SIZE = 65536; // 64KB limit
+    const size_t V2_MAX_PAYLOAD_SIZE = 1000000; // 1MB limit (matches MAX_SCRIPT_ELEMENT_SIZE)
 }
 
 void xsc(CBlockIndex*);
@@ -6879,6 +6879,10 @@ ConnectInputsPost(map<uint256, CTxIndex>& mapTestPool,
                if(fInvalid || nonce.size() != V2_NONCE_SIZE)
                    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed nonce");
 
+               // Payload size validation
+               if(pkey.size() + aesEncrypted.size() > V2_MAX_PAYLOAD_SIZE)
+                   return error("V2 public key payload exceeds maximum size");
+
                // Anti-replay check
                uint256 msgHash = Hash(vvchArgs[argOffset+3].begin(), vvchArgs[argOffset+3].end());
                if (!DIONS_V2::CheckReplay(msgHash))
@@ -7004,6 +7008,10 @@ ConnectInputsPost(map<uint256, CTxIndex>& mapTestPool,
                if(fInvalid || mac.size() != V2_MAC_SIZE)
                    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed MAC");
 
+               // Payload size validation
+               if(encrypted.size() > V2_MAX_PAYLOAD_SIZE)
+                   return error("V2 encrypted message payload exceeds maximum size");
+
                // Anti-replay check
                uint256 msgHash = Hash(vvchArgs[argOffset+3].begin(), vvchArgs[argOffset+3].end());
                if (!DIONS_V2::CheckReplay(msgHash))
@@ -7094,6 +7102,10 @@ ConnectInputsPost(map<uint256, CTxIndex>& mapTestPool,
                vector<unsigned char> nonce = DecodeBase64(nonceBase64.c_str(), &fInvalid);
                if(fInvalid || nonce.size() != V2_NONCE_SIZE)
                    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed nonce");
+
+               // Payload size validation
+               if(message.size() > V2_MAX_PAYLOAD_SIZE)
+                   return error("V2 plain message payload exceeds maximum size");
 
                // Anti-replay check
                uint256 msgHash = Hash(vvchArgs[argOffset+3].begin(), vvchArgs[argOffset+3].end());
