@@ -1467,7 +1467,8 @@ static void ApproximateBestSubset(vector<pair<int64_t, pair<const __wx__Tx*,unsi
   vfBest.assign(vValue.size(), true);
   nBest = nTotalLower;
 
-  seed_insecure_rand();
+  // Cryptographically secure RNG for coin selection privacy
+  unsigned char randByte;
 
   for (int nRep = 0; nRep < iterations && nBest != nTargetValue; nRep++)
   {
@@ -1478,13 +1479,16 @@ static void ApproximateBestSubset(vector<pair<int64_t, pair<const __wx__Tx*,unsi
       {
 	  for (unsigned int i = 0; i < vValue.size(); i++)
 	  {
-	      //The solver here uses a randomized algorithm,
-	      //the randomness serves no real security purpose but is just
-	      //needed to prevent degenerate behavior and it is important
-	      //that the rng fast. We do not use a constant random sequence,
-	      //because there may be some privacy improvement by making
-	      //the selection random.
-	      if (nPass == 0 ? insecure_rand()&1 : !vfIncluded[i])
+	      // Use RAND_bytes for privacy-sensitive coin selection
+	      // Prevents deterministic patterns that leak transaction graph info
+	      bool fSelect;
+	      if (nPass == 0) {
+	          RAND_bytes(&randByte, 1);
+	          fSelect = (randByte & 1);
+	      } else {
+	          fSelect = !vfIncluded[i];
+	      }
+	      if (fSelect)
 	      {
 		  nTotal += vValue[i].first;
 		  vfIncluded[i] = true;
