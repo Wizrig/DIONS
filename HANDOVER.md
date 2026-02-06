@@ -149,13 +149,15 @@ DIONS_PAYLOAD_EXPIRY_DAYS = 30
 - Location: `~/iocoin/derek`
 - Assistant: GPT-4.1
 - System prompt: `/Users/taino/Desktop/Derek/DEREK_SYSTEM_PROMPT.md`
+- **Task file: `/Users/taino/Desktop/Derek/DEREK_TASKS.md`** ← Derek reads this
 - Should help with testnet work and testing
 
-### Tasks for Derek:
+### Tasks for Derek (see DEREK_TASKS.md for details):
 1. Run iocoind daemon on testnet
-2. Test DIONS 2.0 RPC endpoints
-3. Help with integration testing
-4. Can commit under "reed"
+2. Test DIONS 2.0 RPC endpoints (7 commands)
+3. Security review of new RPCs
+4. PQC module unit testing
+5. Can commit under "reed"
 
 ---
 
