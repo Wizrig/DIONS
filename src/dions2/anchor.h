@@ -67,17 +67,41 @@ struct AvailabilityCert {
 
     bool IsValid() const { return signatures.size() >= threshold_k; }
 
-    // Serialization
+    // Serialization - manual for std::array which lacks stream operators
     template<typename Stream>
     void Serialize(Stream& s) const {
         s << threshold_k << total_n;
-        s << pubkeys << signatures;
+        // Write pubkeys
+        uint32_t pubkey_count = static_cast<uint32_t>(pubkeys.size());
+        s << pubkey_count;
+        for (const auto& pk : pubkeys) {
+            s.write(reinterpret_cast<const char*>(pk.data()), 33);
+        }
+        // Write signatures
+        uint32_t sig_count = static_cast<uint32_t>(signatures.size());
+        s << sig_count;
+        for (const auto& sig : signatures) {
+            s.write(reinterpret_cast<const char*>(sig.data()), 64);
+        }
     }
 
     template<typename Stream>
     void Unserialize(Stream& s) {
         s >> threshold_k >> total_n;
-        s >> pubkeys >> signatures;
+        // Read pubkeys
+        uint32_t pubkey_count;
+        s >> pubkey_count;
+        pubkeys.resize(pubkey_count);
+        for (auto& pk : pubkeys) {
+            s.read(reinterpret_cast<char*>(pk.data()), 33);
+        }
+        // Read signatures
+        uint32_t sig_count;
+        s >> sig_count;
+        signatures.resize(sig_count);
+        for (auto& sig : signatures) {
+            s.read(reinterpret_cast<char*>(sig.data()), 64);
+        }
     }
 };
 
@@ -140,20 +164,42 @@ struct MerkleProof {
 
     template<typename Stream>
     void Serialize(Stream& s) const {
-        s << siblings << leaf_index;
+        // Write siblings manually (std::array lacks stream operators)
+        uint32_t sibling_count = static_cast<uint32_t>(siblings.size());
+        s << sibling_count;
+        for (const auto& sib : siblings) {
+            s.write(reinterpret_cast<const char*>(sib.data()), 32);
+        }
+        s << leaf_index;
         // Pack path bits into bytes
         std::vector<uint8_t> path_bytes((path.size() + 7) / 8);
         for (size_t i = 0; i < path.size(); i++) {
             if (path[i]) path_bytes[i / 8] |= (1 << (i % 8));
         }
-        s << path_bytes;
+        uint32_t path_bytes_size = static_cast<uint32_t>(path_bytes.size());
+        s << path_bytes_size;
+        if (!path_bytes.empty()) {
+            s.write(reinterpret_cast<const char*>(path_bytes.data()), path_bytes.size());
+        }
     }
 
     template<typename Stream>
     void Unserialize(Stream& s) {
-        s >> siblings >> leaf_index;
-        std::vector<uint8_t> path_bytes;
-        s >> path_bytes;
+        // Read siblings manually
+        uint32_t sibling_count;
+        s >> sibling_count;
+        siblings.resize(sibling_count);
+        for (auto& sib : siblings) {
+            s.read(reinterpret_cast<char*>(sib.data()), 32);
+        }
+        s >> leaf_index;
+        // Read path bytes
+        uint32_t path_bytes_size;
+        s >> path_bytes_size;
+        std::vector<uint8_t> path_bytes(path_bytes_size);
+        if (path_bytes_size > 0) {
+            s.read(reinterpret_cast<char*>(path_bytes.data()), path_bytes_size);
+        }
         path.resize(siblings.size());
         for (size_t i = 0; i < path.size(); i++) {
             path[i] = (path_bytes[i / 8] >> (i % 8)) & 1;

@@ -2,11 +2,16 @@
 // DIONS 2.0 - Database Implementation
 
 #include "dionsdb.h"
+#include "serialize.h"  // For CDataStream
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <sstream>
 #include <iomanip>
 #include <cstring>
+
+// Serialization type/version for DIONS 2.0
+#define SER_DIONS 100
+#define DIONS_SERIALIZE_VERSION 1
 
 namespace dions2 {
 
@@ -82,20 +87,20 @@ std::string MakeQuotaKey(const std::string& address, const std::string& month) {
     return key;
 }
 
-// Simple serialization to string
+// Serialization to string using CDataStream for binary data
 template<typename T>
 std::string SerializeToString(const T& obj) {
-    std::ostringstream oss;
-    obj.Serialize(oss);
-    return oss.str();
+    CDataStream ss(SER_DIONS, DIONS_SERIALIZE_VERSION);
+    obj.Serialize(ss);
+    return ss.str();
 }
 
-// Simple deserialization from string
+// Deserialization from string using CDataStream
 template<typename T>
 bool DeserializeFromString(const std::string& data, T& obj) {
-    std::istringstream iss(data);
     try {
-        obj.Unserialize(iss);
+        CDataStream ss(data.begin(), data.end(), SER_DIONS, DIONS_SERIALIZE_VERSION);
+        obj.Unserialize(ss);
         return true;
     } catch (...) {
         return false;

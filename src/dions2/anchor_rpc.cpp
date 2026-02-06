@@ -8,6 +8,7 @@
 #include "../bitcoinrpc.h"
 #include "../main.h"
 #include "../wallet.h"
+#include "../init.h"  // For pwalletMain
 
 #include <sstream>
 #include <iomanip>

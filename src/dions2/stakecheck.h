@@ -7,8 +7,8 @@
 #include "anchor.h"
 #include <string>
 
-// Forward declarations
-class CWallet;
+// Forward declarations - __wx__ is the wallet class in this codebase
+class __wx__;
 
 namespace dions2 {
 
@@ -23,7 +23,7 @@ namespace dions2 {
  */
 bool CheckStakeRequirement(
     const std::string& address,
-    const CWallet* wallet,
+    const __wx__* wallet,
     StakeCheckResult& result);
 
 /**
@@ -58,7 +58,7 @@ bool CheckQuota(
  */
 bool GetStakeInfo(
     const std::string& address,
-    const CWallet* wallet,
+    const __wx__* wallet,
     int64_t& stake_amount,
     int64_t& oldest_age);
 

@@ -4,13 +4,14 @@
 #include "stakecheck.h"
 #include "../wallet.h"
 #include "../main.h"
+#include "../base58.h"  // For cba (iocoin address)
 #include <ctime>
 
 namespace dions2 {
 
 bool CheckStakeRequirement(
     const std::string& address,
-    const CWallet* wallet,
+    const __wx__* wallet,
     StakeCheckResult& result)
 {
     result.has_minimum_stake = false;
@@ -61,7 +62,7 @@ bool CheckStakeRequirement(
 
 bool GetStakeInfo(
     const std::string& address,
-    const CWallet* wallet,
+    const __wx__* wallet,
     int64_t& stake_amount,
     int64_t& oldest_age)
 {
@@ -84,7 +85,7 @@ bool GetStakeInfo(
     int64_t oldest_time = current_time;  // Track oldest coin time
 
     for (const auto& item : wallet->mapWallet) {
-        const CWalletTx& wtx = item.second;
+        const __wx__Tx& wtx = item.second;
 
         // Skip non-confirmed transactions
         if (!wtx.IsTrusted())
@@ -97,12 +98,12 @@ bool GetStakeInfo(
             if (!ExtractDestination(wtx.vout[i].scriptPubKey, dest))
                 continue;
 
-            std::string out_address = CBitcoinAddress(dest).ToString();
+            std::string out_address = cba(dest).ToString();
             if (out_address != address)
                 continue;
 
             // Check if output is still unspent
-            if (wallet->IsSpent(wtx.GetHash(), i))
+            if (wtx.IsSpent(i))
                 continue;
 
             // Add to stake
