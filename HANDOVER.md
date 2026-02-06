@@ -61,15 +61,27 @@ make -f makefile.osx clean && make -f makefile.osx -j4
 
 **Binary:** `iocoind` - 17MB arm64 Mach-O executable
 
-## Completed Tasks (Feb 5, 2026)
+## Completed Tasks (Feb 5-6, 2026)
 - ✅ Wire up DIONS 2.0 RPCs in bitcoinrpc.cpp (added 7 new RPC commands)
+- ✅ Port PQC module from Dions-2.0 (Dilithium, Falcon, Kyber algorithms)
+
+### PQC Module Added
+New files in `src/dions2/crypto/`:
+- `pqc.h` - Post-Quantum Cryptography interfaces
+- `pqc.cpp` - Implementation (reference, production uses liboqs)
+
+Device Profiles for IoT:
+- `IOT_MINIMAL`: Falcon512 + Kyber512 (690-byte signatures)
+- `IOT_STANDARD`: Falcon512 + Kyber768
+- `ROBOT_STANDARD`: Dilithium3 + Kyber768
+- `ROBOT_PREMIUM`: Dilithium5 + Kyber1024
 
 ## Pending Tasks
 
 ### High Priority
 1. **Add GC trigger** for expired payloads during block processing
 
-2. **Test DIONS 2.0 RPCs** - Run daemon and verify new endpoints work:
+2. **Test DIONS 2.0 RPCs on Derek's Mac mini** - Run daemon and verify new endpoints work:
    - `getdionsanchor <anchor_id>`
    - `getdionsproof <anchor_id> <payload_hash>`
    - `verifydionsproof <root> <leaf> <proof_json>`
@@ -176,5 +188,7 @@ This aligns with the tier-based quota system in Phase 0.
 ## Next Session Should
 1. ~~Fix boost::filesystem build issues~~ ✅ DONE
 2. ~~Complete RPC integration~~ ✅ DONE (7 RPCs wired up)
-3. Test DIONS 2.0 RPCs (run daemon, test endpoints)
-4. Port PQC module from Dions-2.0 to DIONS main
+3. ~~Port PQC module from Dions-2.0 to DIONS main~~ ✅ DONE
+4. Test DIONS 2.0 RPCs on Derek's Mac mini (run daemon, test endpoints)
+5. Add GC trigger for expired payloads
+6. Integrate PQC with DIONS message signing
