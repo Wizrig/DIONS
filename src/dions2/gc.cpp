@@ -3,6 +3,7 @@
 
 #include "gc.h"
 #include "datalayer.h"
+#include "anchor.h"
 
 #include <mutex>
 #include <atomic>
@@ -122,6 +123,17 @@ GCConfig GetGCConfig()
 {
     std::lock_guard<std::mutex> lock(g_gc_mutex);
     return g_config;
+}
+
+TierRetentionInfo GetTierRetentionInfo()
+{
+    TierRetentionInfo info;
+    info.basic_days = GetTierRetentionDays(DionsTier::BASIC);
+    info.standard_days = GetTierRetentionDays(DionsTier::STANDARD);
+    info.premium_days = GetTierRetentionDays(DionsTier::PREMIUM);
+    info.enterprise_days = GetTierRetentionDays(DionsTier::ENTERPRISE);
+    info.unlimited_days = GetTierRetentionDays(DionsTier::UNLIMITED);
+    return info;
 }
 
 } // namespace dions2

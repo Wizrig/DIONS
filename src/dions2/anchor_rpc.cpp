@@ -265,7 +265,7 @@ Value getdionstier(const Array& params, bool fHelp)
 
     Array tiers;
 
-    // List all tiers
+    // List all tiers with retention info
     for (int i = 1; i <= 5; i++) {
         DionsTier tier = static_cast<DionsTier>(i);
         TierLimits limits = TierLimits::GetLimits(tier);
@@ -273,6 +273,7 @@ Value getdionstier(const Array& params, bool fHelp)
         Object tier_obj;
         tier_obj.push_back(Pair("name", TierToString(tier)));
         tier_obj.push_back(Pair("min_stake", limits.min_stake));
+        tier_obj.push_back(Pair("retention_days", GetTierRetentionDays(tier)));  // NEW: tier-based retention
         tier_obj.push_back(Pair("monthly_messages", static_cast<int64_t>(limits.monthly_messages)));
         tier_obj.push_back(Pair("monthly_bytes_mb", static_cast<int64_t>(limits.monthly_bytes / 1024 / 1024)));
         tier_obj.push_back(Pair("max_batch_size", static_cast<int>(limits.max_batch_size)));
@@ -293,6 +294,7 @@ Value getdionstier(const Array& params, bool fHelp)
         DionsTier tier = GetTierFromStake(stake);
         result.push_back(Pair("your_stake", stake));
         result.push_back(Pair("your_tier", TierToString(tier)));
+        result.push_back(Pair("your_retention_days", GetTierRetentionDays(tier)));
     }
 
     return result;
@@ -358,7 +360,16 @@ Value getdionsstats(const Array& params, bool fHelp)
     result.push_back(Pair("version", "2.0.0-phase0"));
     result.push_back(Pair("min_stake", DIONS_MIN_STAKE));
     result.push_back(Pair("min_stake_age_seconds", DIONS_MIN_STAKE_AGE));
-    result.push_back(Pair("payload_expiry_days", DIONS_PAYLOAD_EXPIRY_DAYS));
+
+    // Tier-based retention info
+    TierRetentionInfo retention = GetTierRetentionInfo();
+    Object retention_obj;
+    retention_obj.push_back(Pair("basic_days", retention.basic_days));
+    retention_obj.push_back(Pair("standard_days", retention.standard_days));
+    retention_obj.push_back(Pair("premium_days", retention.premium_days));
+    retention_obj.push_back(Pair("enterprise_days", retention.enterprise_days));
+    retention_obj.push_back(Pair("unlimited_days", retention.unlimited_days));
+    result.push_back(Pair("tier_retention", retention_obj));
 
     // Data layer stats
     if (g_data_layer) {

@@ -20,8 +20,24 @@ namespace dions2 {
 //-----------------------------------------------------------------------------
 constexpr int64_t DIONS_MIN_STAKE = 1000;           // 1,000 IOC minimum
 constexpr int64_t DIONS_MIN_STAKE_AGE = 86400;      // 24 hours in seconds
+
+// Default payload expiry (used when tier cannot be determined)
 constexpr int32_t DIONS_PAYLOAD_EXPIRY_DAYS = 30;   // Payloads auto-delete after 30 days
 constexpr int64_t DIONS_PAYLOAD_EXPIRY_SECONDS = DIONS_PAYLOAD_EXPIRY_DAYS * 24 * 60 * 60;
+
+// Tier-based retention periods (more staking = more days)
+constexpr int32_t DIONS_RETENTION_BASIC_DAYS = 3;        // BASIC tier: 3 days
+constexpr int32_t DIONS_RETENTION_STANDARD_DAYS = 7;     // STANDARD tier: 7 days
+constexpr int32_t DIONS_RETENTION_PREMIUM_DAYS = 14;     // PREMIUM tier: 14 days
+constexpr int32_t DIONS_RETENTION_ENTERPRISE_DAYS = 30;  // ENTERPRISE tier: 30 days
+constexpr int32_t DIONS_RETENTION_UNLIMITED_DAYS = 30;   // UNLIMITED tier: 30 days
+
+// Convert retention days to seconds
+constexpr int64_t DIONS_RETENTION_BASIC_SECONDS = DIONS_RETENTION_BASIC_DAYS * 24 * 60 * 60;
+constexpr int64_t DIONS_RETENTION_STANDARD_SECONDS = DIONS_RETENTION_STANDARD_DAYS * 24 * 60 * 60;
+constexpr int64_t DIONS_RETENTION_PREMIUM_SECONDS = DIONS_RETENTION_PREMIUM_DAYS * 24 * 60 * 60;
+constexpr int64_t DIONS_RETENTION_ENTERPRISE_SECONDS = DIONS_RETENTION_ENTERPRISE_DAYS * 24 * 60 * 60;
+constexpr int64_t DIONS_RETENTION_UNLIMITED_SECONDS = DIONS_RETENTION_UNLIMITED_DAYS * 24 * 60 * 60;
 
 //-----------------------------------------------------------------------------
 // Stake Tiers - determines monthly quotas
@@ -316,6 +332,15 @@ DionsTier GetTierFromStake(int64_t stake_amount);
 
 // Get current month string
 std::string GetCurrentMonth();
+
+// Get retention period in seconds based on tier
+int64_t GetTierRetentionSeconds(DionsTier tier);
+
+// Get retention period in days based on tier
+int32_t GetTierRetentionDays(DionsTier tier);
+
+// Calculate expiration timestamp for a payload based on tier
+int64_t CalculateExpirationTime(int64_t created_at, DionsTier tier);
 
 } // namespace dions2
 

@@ -30,6 +30,21 @@ struct GCStats {
                 last_prune_height(0), last_prune_time(0), runs_completed(0) {}
 };
 
+// Tier retention info for display
+struct TierRetentionInfo {
+    int32_t basic_days;
+    int32_t standard_days;
+    int32_t premium_days;
+    int32_t enterprise_days;
+    int32_t unlimited_days;
+};
+
+/**
+ * Get tier-based retention information
+ * Returns retention period in days for each tier
+ */
+TierRetentionInfo GetTierRetentionInfo();
+
 /**
  * Initialize the GC system
  * Called during daemon startup

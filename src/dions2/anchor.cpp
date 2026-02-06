@@ -81,6 +81,44 @@ std::string GetCurrentMonth() {
 }
 
 //-----------------------------------------------------------------------------
+// Tier-based retention: "More staking = more days"
+//-----------------------------------------------------------------------------
+int32_t GetTierRetentionDays(DionsTier tier) {
+    switch (tier) {
+        case DionsTier::BASIC:      return DIONS_RETENTION_BASIC_DAYS;      // 3 days
+        case DionsTier::STANDARD:   return DIONS_RETENTION_STANDARD_DAYS;   // 7 days
+        case DionsTier::PREMIUM:    return DIONS_RETENTION_PREMIUM_DAYS;    // 14 days
+        case DionsTier::ENTERPRISE: return DIONS_RETENTION_ENTERPRISE_DAYS; // 30 days
+        case DionsTier::UNLIMITED:  return DIONS_RETENTION_UNLIMITED_DAYS;  // 30 days
+        case DionsTier::NONE:
+        default:
+            return 0;  // No retention for non-stakers
+    }
+}
+
+int64_t GetTierRetentionSeconds(DionsTier tier) {
+    switch (tier) {
+        case DionsTier::BASIC:      return DIONS_RETENTION_BASIC_SECONDS;      // 3 days
+        case DionsTier::STANDARD:   return DIONS_RETENTION_STANDARD_SECONDS;   // 7 days
+        case DionsTier::PREMIUM:    return DIONS_RETENTION_PREMIUM_SECONDS;    // 14 days
+        case DionsTier::ENTERPRISE: return DIONS_RETENTION_ENTERPRISE_SECONDS; // 30 days
+        case DionsTier::UNLIMITED:  return DIONS_RETENTION_UNLIMITED_SECONDS;  // 30 days
+        case DionsTier::NONE:
+        default:
+            return 0;  // No retention for non-stakers
+    }
+}
+
+int64_t CalculateExpirationTime(int64_t created_at, DionsTier tier) {
+    int64_t retention_seconds = GetTierRetentionSeconds(tier);
+    if (retention_seconds == 0) {
+        // No tier = no storage (immediate expiration)
+        return created_at;
+    }
+    return created_at + retention_seconds;
+}
+
+//-----------------------------------------------------------------------------
 // CDionsAnchor implementation
 //-----------------------------------------------------------------------------
 std::array<uint8_t, 32> CDionsAnchor::GetAnchorId() const {
