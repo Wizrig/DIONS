@@ -11,6 +11,7 @@
 #include "ui_interface.h"
 #include "checkpoints.h"
 #include "dions2/datalayer.h"
+#include "dions2/gc.h"
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 // boost/filesystem/convenience.hpp removed in modern Boost - functions now in boost/filesystem.hpp
@@ -90,7 +91,8 @@ void Shutdown(void* parg)
     {
         fShutdown = true;
         nTransactionsUpdated++;
-        dions2::ShutdownDataLayer();  // DIONS 2.0 cleanup
+        dions2::ShutdownGC();         // DIONS 2.0 GC cleanup
+        dions2::ShutdownDataLayer();  // DIONS 2.0 data layer cleanup
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
@@ -1009,6 +1011,16 @@ bool AppInit2()
                    strPayloadMode.c_str(),
                    dions2::g_data_layer ? dions2::g_data_layer->GetTypeName().c_str() : "none");
         }
+
+        // Initialize DIONS 2.0 garbage collection
+        dions2::GCConfig gcConfig;
+        gcConfig.prune_interval_blocks = GetArg("-dions_gc_interval", 100);
+        gcConfig.max_prune_per_run = GetArg("-dions_gc_max_prune", 1000);
+        gcConfig.enabled = GetBoolArg("-dions_gc_enabled", true);
+        dions2::InitGC(gcConfig);
+        printf("DIONS 2.0: GC initialized (interval=%d blocks, max_prune=%d, enabled=%s)\n",
+               gcConfig.prune_interval_blocks, gcConfig.max_prune_per_run,
+               gcConfig.enabled ? "true" : "false");
     }
 
     // ********************************************************* Step 12: finished

@@ -5,6 +5,7 @@
 #include "stakecheck.h"
 #include "datalayer.h"
 #include "dionsdb.h"
+#include "gc.h"
 #include "../bitcoinrpc.h"
 #include "../main.h"
 #include "../wallet.h"
@@ -367,6 +368,72 @@ Value getdionsstats(const Array& params, bool fHelp)
 }
 
 //-----------------------------------------------------------------------------
+// getdionsgcstats - Get garbage collection statistics
+//-----------------------------------------------------------------------------
+Value getdionsgcstats(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw std::runtime_error(
+            "getdionsgcstats\n"
+            "Get DIONS 2.0 garbage collection statistics.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"enabled\": true|false,\n"
+            "  \"prune_interval_blocks\": n,\n"
+            "  \"max_prune_per_run\": n,\n"
+            "  \"total_payloads_pruned\": n,\n"
+            "  \"total_bytes_reclaimed\": n,\n"
+            "  \"last_prune_height\": n,\n"
+            "  \"last_prune_time\": n,\n"
+            "  \"runs_completed\": n\n"
+            "}\n"
+        );
+
+    GCConfig config = GetGCConfig();
+    GCStats stats = GetGCStats();
+
+    Object result;
+    result.push_back(Pair("enabled", config.enabled));
+    result.push_back(Pair("prune_interval_blocks", static_cast<int>(config.prune_interval_blocks)));
+    result.push_back(Pair("max_prune_per_run", static_cast<int>(config.max_prune_per_run)));
+    result.push_back(Pair("total_payloads_pruned", static_cast<int64_t>(stats.total_payloads_pruned)));
+    result.push_back(Pair("total_bytes_reclaimed", static_cast<int64_t>(stats.total_bytes_reclaimed)));
+    result.push_back(Pair("last_prune_height", static_cast<int>(stats.last_prune_height)));
+    result.push_back(Pair("last_prune_time", stats.last_prune_time));
+    result.push_back(Pair("runs_completed", static_cast<int>(stats.runs_completed)));
+
+    return result;
+}
+
+//-----------------------------------------------------------------------------
+// forcedionsgc - Force a garbage collection run
+//-----------------------------------------------------------------------------
+Value forcedionsgc(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw std::runtime_error(
+            "forcedionsgc\n"
+            "Force a DIONS 2.0 garbage collection run.\n"
+            "Useful for testing or manual maintenance.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"payloads_pruned\": n,\n"
+            "  \"success\": true|false\n"
+            "}\n"
+        );
+
+    int64_t current_time = GetTime();
+    uint32_t pruned = ForceGC(current_time);
+
+    Object result;
+    result.push_back(Pair("payloads_pruned", static_cast<int>(pruned)));
+    result.push_back(Pair("success", true));
+    result.push_back(Pair("timestamp", current_time));
+
+    return result;
+}
+
+//-----------------------------------------------------------------------------
 // RPC Registration
 //-----------------------------------------------------------------------------
 
@@ -380,6 +447,8 @@ static const CRPCCommand dions2Commands[] = {
     { "getdionstier",      &getdionstier,      false },
     { "getpayloadmode",    &getpayloadmode,    false },
     { "getdionsstats",     &getdionsstats,     false },
+    { "getdionsgcstats",   &getdionsgcstats,   false },
+    { "forcedionsgc",      &forcedionsgc,      false },
 };
 
 void RegisterDions2RPCs()

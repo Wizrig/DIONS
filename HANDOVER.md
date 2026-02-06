@@ -4,6 +4,7 @@
 
 ### Latest Git Commits (Wizrig/DIONS dions-2.0 branch)
 ```
+[pending] Add GC module for expired payloads
 ea76bbba Update HANDOVER.md: PQC module ported successfully
 333c9d8e Add Post-Quantum Cryptography (PQC) module for IoT devices
 3c564ae5 Update HANDOVER.md: RPC integration complete
@@ -52,7 +53,7 @@ Created `src/dions2/` with new architecture:
 - `stakecheck.h/cpp` - Stake requirements (1000 IOC, 24hr age)
 - `datalayer.h/cpp` - IDataLayer interface, LocalDiskDataLayer
 - `dionsdb.h/cpp` - LevelDB schemas for anchors/payloads/quotas
-- `anchor_rpc.cpp` - New RPCs (7 commands)
+- `anchor_rpc.cpp` - New RPCs (9 commands)
 
 ### 2. RPC Commands Wired Up
 Added to `bitcoinrpc.cpp`:
@@ -63,6 +64,8 @@ Added to `bitcoinrpc.cpp`:
 - `getdionstier [stake_amount]` - Get stake tier
 - `getpayloadmode` - Get storage mode
 - `getdionsstats` - Get DIONS statistics
+- `getdionsgcstats` - Get GC statistics **NEW**
+- `forcedionsgc` - Force a GC run **NEW**
 
 ### 3. PQC Module Ported
 New files in `src/dions2/crypto/`:
@@ -87,6 +90,21 @@ New files in `src/dions2/crypto/`:
 - `ROBOT_STANDARD`: Dilithium3 + Kyber768
 - `ROBOT_PREMIUM`: Dilithium5 + Kyber1024
 
+### 4. GC Module Added ✅ NEW
+New files:
+- `gc.h` - GC configuration, statistics, and API
+- `gc.cpp` - Implementation
+
+**Features:**
+- Automatic GC trigger on block connection (every N blocks)
+- Configurable via command-line args:
+  - `-dions_gc_interval=100` (blocks between GC runs)
+  - `-dions_gc_max_prune=1000` (max payloads per run)
+  - `-dions_gc_enabled=1` (enable/disable)
+- Stats tracking: payloads pruned, bytes reclaimed, run count
+- Hooks into `SetBestChain` for automatic triggering
+- RPC commands: `getdionsgcstats`, `forcedionsgc`
+
 ---
 
 ## PENDING TASKS 📋
@@ -94,21 +112,19 @@ New files in `src/dions2/crypto/`:
 ### High Priority
 1. **Test DIONS 2.0 RPCs on Derek's Mac mini**
    - Run daemon with testnet
-   - Test all 7 new RPC endpoints
+   - Test all 9 new RPC endpoints
    - Verify stake checking works
 
-2. **Add GC trigger** for expired payloads during block processing
-
-3. **Integrate PQC with DIONS message signing**
+2. **Integrate PQC with DIONS message signing**
    - Add PQC signature option for DIONS messages
    - Hybrid mode: Ed25519 + Falcon for transition
 
 ### Medium Priority
-4. **Review EVM/BPF work** for IoT lightweight contracts
+3. **Review EVM/BPF work** for IoT lightweight contracts
    - eBPF VM embedding (rbpf library)
    - Check Derek's DVM strategy document
 
-5. **Port EVM/SVM executors** from Dions-2.0
+4. **Port EVM/SVM executors** from Dions-2.0
 
 ---
 
@@ -130,6 +146,29 @@ DIONS_PAYLOAD_EXPIRY_DAYS = 30
 
 ---
 
+## GC CONFIGURATION
+
+```cpp
+struct GCConfig {
+    uint32_t prune_interval_blocks = 100;  // Run GC every 100 blocks
+    uint32_t max_prune_per_run = 1000;     // Limit per run
+    bool enabled = true;
+};
+```
+
+**Command-line options:**
+```bash
+./iocoind -dions_gc_interval=50 -dions_gc_max_prune=500 -dions_gc_enabled=1
+```
+
+**RPC commands:**
+```bash
+./iocoind getdionsgcstats
+./iocoind forcedionsgc
+```
+
+---
+
 ## FILE LOCATIONS
 
 | Path | Description |
@@ -137,6 +176,8 @@ DIONS_PAYLOAD_EXPIRY_DAYS = 30
 | `/Users/taino/Desktop/DIONS-2.0-work/` | Main DIONS repo (dions-2.0 branch) |
 | `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/` | Phase 0 anchor code |
 | `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/crypto/` | PQC module |
+| `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/gc.h` | GC configuration & API |
+| `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/gc.cpp` | GC implementation |
 | `/Users/taino/Desktop/Dions-2.0-cleanup/` | Cleaned Dions-2.0 repo |
 | `/Users/taino/Desktop/Derek/DIONS-DVM-Master/` | DVM/EVM code + documentation |
 | `/Users/taino/Desktop/ioc-recovery/` | Blockchain data directory |
@@ -154,10 +195,11 @@ DIONS_PAYLOAD_EXPIRY_DAYS = 30
 
 ### Tasks for Derek (see DEREK_TASKS.md for details):
 1. Run iocoind daemon on testnet
-2. Test DIONS 2.0 RPC endpoints (7 commands)
+2. Test DIONS 2.0 RPC endpoints (9 commands now)
 3. Security review of new RPCs
 4. PQC module unit testing
-5. Can commit under "reed"
+5. GC module testing
+6. Can commit under "reed"
 
 ---
 
@@ -180,6 +222,8 @@ make -f makefile.osx clean && make -f makefile.osx -j4
 ./iocoind getdionsstats
 ./iocoind getdionstier 5000
 ./iocoind getpayloadmode
+./iocoind getdionsgcstats
+./iocoind forcedionsgc
 ```
 
 ---
@@ -192,6 +236,7 @@ make -f makefile.osx clean && make -f makefile.osx -j4
 4. **30-day payload expiration** (anchors permanent, payloads GC'd)
 5. **Hybrid mode** for transition period
 6. **PQC ready** for post-quantum transition
+7. **Automatic GC** on block connect (configurable interval)
 
 ---
 
@@ -214,11 +259,12 @@ make -f makefile.osx clean && make -f makefile.osx -j4
 ## NEXT SESSION SHOULD
 
 1. ~~Fix boost::filesystem build issues~~ ✅ DONE
-2. ~~Complete RPC integration~~ ✅ DONE (7 RPCs wired up)
+2. ~~Complete RPC integration~~ ✅ DONE (9 RPCs wired up)
 3. ~~Port PQC module from Dions-2.0 to DIONS main~~ ✅ DONE
-4. **Test DIONS 2.0 RPCs on Derek's Mac mini** (run daemon, test endpoints)
-5. **Add GC trigger for expired payloads**
+4. ~~Add GC trigger for expired payloads~~ ✅ DONE
+5. **Test DIONS 2.0 RPCs on Derek's Mac mini** (run daemon, test endpoints)
 6. **Integrate PQC with DIONS message signing**
+7. **Commit GC module to GitHub**
 
 ---
 

@@ -454,6 +454,8 @@ static const CRPCCommand vRPCCommands[] =
     { "getdionstier",           &getdionstier,           true,   false },
     { "getpayloadmode",         &getpayloadmode,         true,   false },
     { "getdionsstats",          &getdionsstats,          true,   false },
+    { "getdionsgcstats",        &getdionsgcstats,        true,   false },
+    { "forcedionsgc",           &forcedionsgc,           false,  false },
 };
 
 CRPCTable::CRPCTable()

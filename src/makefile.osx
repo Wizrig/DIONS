@@ -181,6 +181,8 @@ OBJS= \
     obj/dions2/datalayer.o \
     obj/dions2/dionsdb.o \
     obj/dions2/anchor_rpc.o \
+    obj/dions2/gc.o \
+    obj/dions2/hybrid_sig.o \
     obj/dions2/crypto/pqc.o
 
 all: iocoind

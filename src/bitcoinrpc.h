@@ -322,5 +322,7 @@ extern json_spirit::Value getdionsquota(const json_spirit::Array& params, bool f
 extern json_spirit::Value getdionstier(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getpayloadmode(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getdionsstats(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getdionsgcstats(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value forcedionsgc(const json_spirit::Array& params, bool fHelp);
 
 #endif

@@ -25,6 +25,7 @@ namespace fs = boost::filesystem;
 
 #include "dions.h"
 #include "devnet.h"
+#include "dions2/gc.h"
 //
 // Global state
 //
@@ -2257,6 +2258,12 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     {
         boost::replace_all(strCmd, "%s", hashBestChain.GetHex());
         boost::thread t(runCommand, strCmd); // thread runs free
+    }
+
+    // DIONS 2.0: Trigger garbage collection on block connected
+    if (!fIsInitialDownload)
+    {
+        dions2::OnBlockConnected(nBestHeight, pindexBest->GetBlockTime());
     }
 
     return true;
