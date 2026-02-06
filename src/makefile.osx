@@ -49,6 +49,19 @@ ifndef BDB_PREFIX
   endif
 endif
 
+# liboqs path detection for Post-Quantum Cryptography
+ifndef LIBOQS_PREFIX
+  ifeq ($(shell test -d $(DEPSDIR)/opt/liboqs && echo 1), 1)
+    LIBOQS_PREFIX=$(DEPSDIR)/opt/liboqs
+    HAVE_LIBOQS=1
+  else ifeq ($(shell test -f $(DEPSDIR)/include/oqs/oqs.h && echo 1), 1)
+    LIBOQS_PREFIX=$(DEPSDIR)
+    HAVE_LIBOQS=1
+  else
+    HAVE_LIBOQS=0
+  endif
+endif
+
 INCLUDEPATHS= \
  -I"$(CURDIR)" \
  -I"$(CURDIR)"/obj \
@@ -56,10 +69,20 @@ INCLUDEPATHS= \
  -I"$(DEPSDIR)/include" \
  -I"$(BDB_PREFIX)/include$(BDB_INCLUDE_SUFFIX)"
 
+# Add liboqs include path if available
+ifeq ($(HAVE_LIBOQS), 1)
+  INCLUDEPATHS += -I"$(LIBOQS_PREFIX)/include"
+endif
+
 LIBPATHS= \
  -L"$(OPENSSL_PREFIX)/lib" \
  -L"$(DEPSDIR)/lib" \
  -L"$(BDB_PREFIX)/lib$(BDB_LIB_SUFFIX)"
+
+# Add liboqs lib path if available
+ifeq ($(HAVE_LIBOQS), 1)
+  LIBPATHS += -L"$(LIBOQS_PREFIX)/lib"
+endif
 
 
 LIBS= -dead_strip
@@ -92,9 +115,19 @@ LIBS += \
  -lssl \
  -lcrypto \
  -lz
+
+# Add liboqs library if available
+ifeq ($(HAVE_LIBOQS), 1)
+  LIBS += -loqs
+endif
 endif
 
 DEFS=-DMAC_OSX -DMSG_NOSIGNAL=0 -DBOOST_SPIRIT_THREADSAFE
+
+# Add HAVE_LIBOQS define if liboqs is available
+ifeq ($(HAVE_LIBOQS), 1)
+  DEFS += -DHAVE_LIBOQS
+endif
 
 # Detect architecture for platform-specific flags
 ARCH := $(shell uname -m)
@@ -185,7 +218,8 @@ OBJS= \
     obj/dions2/hybrid_sig.o \
     obj/dions2/evm.o \
     obj/dions2/svm.o \
-    obj/dions2/crypto/pqc.o
+    obj/dions2/crypto/pqc.o \
+    obj/dions2/crypto/pqc_liboqs.o
 
 all: iocoind
 
