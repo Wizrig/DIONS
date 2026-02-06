@@ -6,6 +6,7 @@
 #include "datalayer.h"
 #include "dionsdb.h"
 #include "gc.h"
+#include "hybrid_sig.h"
 #include "../bitcoinrpc.h"
 #include "../main.h"
 #include "../wallet.h"
@@ -434,21 +435,124 @@ Value forcedionsgc(const Array& params, bool fHelp)
 }
 
 //-----------------------------------------------------------------------------
+// gethybridsigschemes - List available hybrid signature schemes
+//-----------------------------------------------------------------------------
+Value gethybridsigschemes(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw std::runtime_error(
+            "gethybridsigschemes\n"
+            "List available DIONS 2.0 hybrid signature schemes.\n"
+            "\nResult:\n"
+            "[\n"
+            "  {\n"
+            "    \"id\": n,\n"
+            "    \"name\": \"xxx\",\n"
+            "    \"type\": \"classical|pqc|hybrid\",\n"
+            "    \"quantum_resistant\": true|false\n"
+            "  },\n"
+            "  ...\n"
+            "]\n"
+        );
+
+    Array schemes;
+
+    // List all signature schemes
+    struct SchemeInfo {
+        SignatureScheme scheme;
+        const char* name;
+        const char* type;
+    };
+
+    static const SchemeInfo scheme_list[] = {
+        { SignatureScheme::ECDSA_SECP256K1, "ecdsa_secp256k1", "classical" },
+        { SignatureScheme::ED25519, "ed25519", "classical" },
+        { SignatureScheme::FALCON512, "falcon512", "pqc" },
+        { SignatureScheme::FALCON1024, "falcon1024", "pqc" },
+        { SignatureScheme::DILITHIUM2, "dilithium2", "pqc" },
+        { SignatureScheme::DILITHIUM3, "dilithium3", "pqc" },
+        { SignatureScheme::DILITHIUM5, "dilithium5", "pqc" },
+        { SignatureScheme::HYBRID_ED25519_FALCON512, "hybrid_ed25519_falcon512", "hybrid" },
+        { SignatureScheme::HYBRID_ED25519_DILITHIUM3, "hybrid_ed25519_dilithium3", "hybrid" },
+        { SignatureScheme::HYBRID_ECDSA_FALCON512, "hybrid_ecdsa_falcon512", "hybrid" },
+        { SignatureScheme::HYBRID_ECDSA_DILITHIUM3, "hybrid_ecdsa_dilithium3", "hybrid" },
+    };
+
+    for (const auto& s : scheme_list) {
+        Object scheme_obj;
+        scheme_obj.push_back(Pair("id", static_cast<int>(s.scheme)));
+        scheme_obj.push_back(Pair("name", s.name));
+        scheme_obj.push_back(Pair("type", s.type));
+        scheme_obj.push_back(Pair("quantum_resistant", HybridSigner::IsQuantumResistant(s.scheme)));
+        schemes.push_back(scheme_obj);
+    }
+
+    return schemes;
+}
+
+//-----------------------------------------------------------------------------
+// getrecommendedsigscheme - Get recommended scheme for device profile
+//-----------------------------------------------------------------------------
+Value getrecommendedsigscheme(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw std::runtime_error(
+            "getrecommendedsigscheme [device_profile]\n"
+            "Get recommended hybrid signature scheme for a device profile.\n"
+            "\nArguments:\n"
+            "1. device_profile (string, optional) One of: iot_minimal, iot_standard,\n"
+            "                   robot_standard, robot_premium, server, paranoid\n"
+            "                   Default: server\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"profile\": \"xxx\",\n"
+            "  \"recommended_scheme\": \"xxx\",\n"
+            "  \"scheme_id\": n,\n"
+            "  \"quantum_resistant\": true|false\n"
+            "}\n"
+        );
+
+    std::string profile_name = "server";
+    if (params.size() > 0)
+        profile_name = params[0].get_str();
+
+    pqc::DeviceProfile profile = pqc::DeviceProfile::SERVER;
+    if (profile_name == "iot_minimal") profile = pqc::DeviceProfile::IOT_MINIMAL;
+    else if (profile_name == "iot_standard") profile = pqc::DeviceProfile::IOT_STANDARD;
+    else if (profile_name == "robot_standard") profile = pqc::DeviceProfile::ROBOT_STANDARD;
+    else if (profile_name == "robot_premium") profile = pqc::DeviceProfile::ROBOT_PREMIUM;
+    else if (profile_name == "server") profile = pqc::DeviceProfile::SERVER;
+    else if (profile_name == "paranoid") profile = pqc::DeviceProfile::PARANOID;
+
+    SignatureScheme scheme = HybridSigner::GetRecommendedScheme(profile);
+
+    Object result;
+    result.push_back(Pair("profile", profile_name));
+    result.push_back(Pair("recommended_scheme", HybridSigner::SchemeName(scheme)));
+    result.push_back(Pair("scheme_id", static_cast<int>(scheme)));
+    result.push_back(Pair("quantum_resistant", HybridSigner::IsQuantumResistant(scheme)));
+
+    return result;
+}
+
+//-----------------------------------------------------------------------------
 // RPC Registration
 //-----------------------------------------------------------------------------
 
 // RPC command table entry structure (matches bitcoinrpc.h)
 static const CRPCCommand dions2Commands[] = {
     // DIONS 2.0 Anchor RPCs
-    { "getdionsanchor",    &getdionsanchor,    false },
-    { "getdionsproof",     &getdionsproof,     false },
-    { "verifydionsproof",  &verifydionsproof,  false },
-    { "getdionsquota",     &getdionsquota,     false },
-    { "getdionstier",      &getdionstier,      false },
-    { "getpayloadmode",    &getpayloadmode,    false },
-    { "getdionsstats",     &getdionsstats,     false },
-    { "getdionsgcstats",   &getdionsgcstats,   false },
-    { "forcedionsgc",      &forcedionsgc,      false },
+    { "getdionsanchor",         &getdionsanchor,         false },
+    { "getdionsproof",          &getdionsproof,          false },
+    { "verifydionsproof",       &verifydionsproof,       false },
+    { "getdionsquota",          &getdionsquota,          false },
+    { "getdionstier",           &getdionstier,           false },
+    { "getpayloadmode",         &getpayloadmode,         false },
+    { "getdionsstats",          &getdionsstats,          false },
+    { "getdionsgcstats",        &getdionsgcstats,        false },
+    { "forcedionsgc",           &forcedionsgc,           false },
+    { "gethybridsigschemes",    &gethybridsigschemes,    false },
+    { "getrecommendedsigscheme",&getrecommendedsigscheme,false },
 };
 
 void RegisterDions2RPCs()

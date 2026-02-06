@@ -456,6 +456,8 @@ static const CRPCCommand vRPCCommands[] =
     { "getdionsstats",          &getdionsstats,          true,   false },
     { "getdionsgcstats",        &getdionsgcstats,        true,   false },
     { "forcedionsgc",           &forcedionsgc,           false,  false },
+    { "gethybridsigschemes",    &gethybridsigschemes,    true,   false },
+    { "getrecommendedsigscheme",&getrecommendedsigscheme,true,   false },
 };
 
 CRPCTable::CRPCTable()

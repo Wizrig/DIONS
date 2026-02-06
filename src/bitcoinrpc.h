@@ -324,5 +324,7 @@ extern json_spirit::Value getpayloadmode(const json_spirit::Array& params, bool 
 extern json_spirit::Value getdionsstats(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getdionsgcstats(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value forcedionsgc(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value gethybridsigschemes(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getrecommendedsigscheme(const json_spirit::Array& params, bool fHelp);
 
 #endif
