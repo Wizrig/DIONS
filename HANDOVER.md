@@ -43,20 +43,33 @@ DIONS_PAYLOAD_EXPIRY_DAYS = 30
 - Renamed references to AI_GUIDELINES.md
 - Force-pushed clean history
 
-### Build Status
-The base iocoin codebase has pre-existing boost::filesystem compatibility issues on modern macOS. The DIONS 2.0 code itself is complete but needs the base build issues fixed first.
+### Build Status ✅ FIXED
+The DIONS 2.0 codebase now builds successfully on macOS arm64.
+
+**Build fixes applied (Feb 5, 2026):**
+- Fixed boost::filesystem compatibility (namespace alias `fs = boost::filesystem`)
+- Fixed serialization using `CDataStream` instead of `std::stringstream`
+- Fixed wallet API compatibility (`__wx__` instead of `CWallet`)
+- Fixed address class (`cba` instead of `CBitcoinAddress`)
+- Added proper includes for `init.h` (pwalletMain extern)
+
+**Build command:**
+```bash
+cd /Users/taino/Desktop/DIONS-2.0-work/src
+make -f makefile.osx clean && make -f makefile.osx -j4
+```
+
+**Binary:** `iocoind` - 17MB arm64 Mach-O executable
 
 ## Pending Tasks
 
 ### High Priority
-1. **Fix boost::filesystem compatibility** in db.cpp and init.cpp
-   - Change `filesystem::` to `boost::filesystem::`
-   - Remove deprecated `boost/filesystem/convenience.hpp` include
-
-2. **Wire up DIONS 2.0 RPCs** in bitcoinrpc.cpp
+1. **Wire up DIONS 2.0 RPCs** in bitcoinrpc.cpp
    - Call `RegisterDions2RPCs()` during server initialization
 
-3. **Add GC trigger** for expired payloads during block processing
+2. **Add GC trigger** for expired payloads during block processing
+
+3. **Test DIONS 2.0 RPCs** - Run daemon and verify new endpoints work
 
 ### Medium Priority
 4. **Review EVM/BPF work** for IoT lightweight contracts
@@ -154,7 +167,7 @@ This aligns with the tier-based quota system in Phase 0.
 3. **Phase 3:** Device attestation via stake-weighted signatures
 
 ## Next Session Should
-1. Fix boost::filesystem build issues
-2. Complete RPC integration
+1. ~~Fix boost::filesystem build issues~~ ✅ DONE
+2. Complete RPC integration (wire up RegisterDions2RPCs)
 3. Test DIONS 2.0 RPCs
 4. Port PQC module from Dions-2.0 to DIONS main
