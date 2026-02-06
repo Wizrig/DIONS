@@ -4,15 +4,12 @@
 
 ### Latest Git Commits (Wizrig/DIONS dions-2.0 branch)
 ```
-[pending] Add GC module for expired payloads
+f257ab2a Add hybrid signature RPCs
+661028bd Add GC module and hybrid PQC signature support
 ea76bbba Update HANDOVER.md: PQC module ported successfully
 333c9d8e Add Post-Quantum Cryptography (PQC) module for IoT devices
-3c564ae5 Update HANDOVER.md: RPC integration complete
 9accf4f4 Wire up DIONS 2.0 RPCs in main RPC table
-b39dbb48 Update HANDOVER.md: Build now working on macOS arm64
 66288a54 Fix DIONS 2.0 build issues for macOS
-6c08d692 Update handover with IoT/PQC analysis from Dions-2.0
-c31599b2 Add development handover document for session continuity
 e0cddd43 DIONS 2.0 Phase 0: Anchor architecture foundation
 ```
 
@@ -55,7 +52,7 @@ Created `src/dions2/` with new architecture:
 - `dionsdb.h/cpp` - LevelDB schemas for anchors/payloads/quotas
 - `anchor_rpc.cpp` - New RPCs (9 commands)
 
-### 2. RPC Commands Wired Up
+### 2. RPC Commands Wired Up (11 Total)
 Added to `bitcoinrpc.cpp`:
 - `getdionsanchor <anchor_id>` - Get anchor details
 - `getdionsproof <anchor_id> <payload_hash>` - Get Merkle proof
@@ -64,8 +61,10 @@ Added to `bitcoinrpc.cpp`:
 - `getdionstier [stake_amount]` - Get stake tier
 - `getpayloadmode` - Get storage mode
 - `getdionsstats` - Get DIONS statistics
-- `getdionsgcstats` - Get GC statistics **NEW**
-- `forcedionsgc` - Force a GC run **NEW**
+- `getdionsgcstats` - Get GC statistics
+- `forcedionsgc` - Force a GC run
+- `gethybridsigschemes` - List hybrid signature schemes **NEW**
+- `getrecommendedsigscheme` - Get recommended scheme for device **NEW**
 
 ### 3. PQC Module Ported
 New files in `src/dions2/crypto/`:
