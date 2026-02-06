@@ -72,6 +72,16 @@ ifndef EVMONE_PREFIX
   endif
 endif
 
+# SBPF (Solana BPF VM) path detection for SVM bytecode execution
+ifndef SBPF_PREFIX
+  ifeq ($(shell test -f /Users/taino/ioc-build/deps/sbpf-ffi/target/release/libsbpf_ffi.dylib && echo 1), 1)
+    SBPF_PREFIX=/Users/taino/ioc-build/deps/sbpf-ffi/target/release
+    HAVE_SBPF=1
+  else
+    HAVE_SBPF=0
+  endif
+endif
+
 INCLUDEPATHS= \
  -I"$(CURDIR)" \
  -I"$(CURDIR)"/obj \
@@ -102,6 +112,11 @@ endif
 # Add evmone lib path if available
 ifeq ($(HAVE_EVMONE), 1)
   LIBPATHS += -L"$(EVMONE_PREFIX)/build/lib"
+endif
+
+# Add SBPF lib path if available
+ifeq ($(HAVE_SBPF), 1)
+  LIBPATHS += -L"$(SBPF_PREFIX)"
 endif
 
 
@@ -145,6 +160,11 @@ endif
 ifeq ($(HAVE_EVMONE), 1)
   LIBS += -levmone
 endif
+
+# Add SBPF library if available (requires Rust runtime)
+ifeq ($(HAVE_SBPF), 1)
+  LIBS += -lsbpf_ffi
+endif
 endif
 
 DEFS=-DMAC_OSX -DMSG_NOSIGNAL=0 -DBOOST_SPIRIT_THREADSAFE
@@ -157,6 +177,11 @@ endif
 # Add HAVE_EVMONE define if evmone is available
 ifeq ($(HAVE_EVMONE), 1)
   DEFS += -DHAVE_EVMONE
+endif
+
+# Add HAVE_SBPF define if SBPF is available
+ifeq ($(HAVE_SBPF), 1)
+  DEFS += -DHAVE_SBPF
 endif
 
 # Detect architecture for platform-specific flags
@@ -309,7 +334,10 @@ obj/%.o: %.c
 	  rm -f $(@:%.o=%.d)
 
 iocoind: $(OBJS:obj/%=obj/%)
-	$(CXX) $(CFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
+	$(CXX) $(CFLAGS) -Wl,-headerpad_max_install_names -o $@ $(LIBPATHS) $^ $(LIBS)
+	@# Add rpaths for dynamic libraries
+	@install_name_tool -add_rpath /Users/taino/ioc-build/deps/evmone/build/lib $@ 2>/dev/null || true
+	@install_name_tool -add_rpath /Users/taino/ioc-build/deps/sbpf-ffi/target/release/deps $@ 2>/dev/null || true
 
 clean:
 	-rm -f iocoind

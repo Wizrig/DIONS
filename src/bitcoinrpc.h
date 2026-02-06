@@ -341,4 +341,7 @@ extern json_spirit::Value getsvmrentexemption(const json_spirit::Array& params, 
 // DIONS 2.0 EVM Execution RPC (evmone)
 extern json_spirit::Value executeevm(const json_spirit::Array& params, bool fHelp);
 
+// DIONS 2.0 SVM Execution RPC (SBPF)
+extern json_spirit::Value executesvm(const json_spirit::Array& params, bool fHelp);
+
 #endif

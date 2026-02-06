@@ -469,6 +469,8 @@ static const CRPCCommand vRPCCommands[] =
     { "getsvmrentexemption",    &getsvmrentexemption,    true,   false },
     // EVM Execution (evmone)
     { "executeevm",             &executeevm,             false,  false },
+    // SVM Execution (SBPF)
+    { "executesvm",             &executesvm,             false,  false },
 };
 
 CRPCTable::CRPCTable()

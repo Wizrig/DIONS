@@ -10,6 +10,7 @@
 #include "evm.h"
 #include "svm.h"
 #include "evmc_host.h"
+#include "sbpf_ffi.h"
 #include "../bitcoinrpc.h"
 #include "../main.h"
 #include "../wallet.h"
@@ -924,6 +925,89 @@ Value executeevm(const Array& params, bool fHelp)
 }
 
 //-----------------------------------------------------------------------------
+// executesvm - Execute Solana BPF bytecode using SBPF
+//-----------------------------------------------------------------------------
+Value executesvm(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 3)
+        throw std::runtime_error(
+            "executesvm <elf_bytecode_hex> [instruction_limit] [input_hex]\n"
+            "Execute Solana BPF bytecode using SBPF.\n"
+            "\nArguments:\n"
+            "1. elf_bytecode_hex   (string, required) BPF ELF bytecode as hex (with 0x prefix)\n"
+            "2. instruction_limit  (numeric, optional) Instruction limit (default: 1000000)\n"
+            "3. input_hex          (string, optional) Input data as hex (default: empty)\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"success\": true|false,\n"
+            "  \"status\": \"xxx\",\n"
+            "  \"return_value\": n,\n"
+            "  \"instruction_count\": n,\n"
+            "  \"error\": \"xxx\" (if failed)\n"
+            "}\n"
+        );
+
+    // Check if SBPF is available
+    if (!SBPFExecutor::IsAvailable()) {
+        Object result;
+        result.push_back(Pair("success", false));
+        result.push_back(Pair("error", "SBPF not available - compile with HAVE_SBPF"));
+        return result;
+    }
+
+    // Parse bytecode
+    std::vector<uint8_t> bytecode = HexToBytes(params[0].get_str());
+
+    // Parse instruction limit
+    uint64_t instruction_limit = 1000000;
+    if (params.size() > 1) {
+        if (params[1].type() == str_type) {
+            instruction_limit = std::stoull(params[1].get_str());
+        } else {
+            instruction_limit = params[1].get_int64();
+        }
+    }
+
+    // Parse input data
+    std::vector<uint8_t> input;
+    if (params.size() > 2) {
+        input = HexToBytes(params[2].get_str());
+    }
+
+    // Create executor and run
+    SBPFExecutor executor;
+    if (!executor.IsValid()) {
+        Object result;
+        result.push_back(Pair("success", false));
+        result.push_back(Pair("error", "Failed to create SBPF VM instance"));
+        return result;
+    }
+
+    SbpfExecutionResult sbpf_result = executor.Execute(bytecode, input, instruction_limit);
+
+    // Build response
+    Object result;
+    bool success = (sbpf_result.result == SBPF_SUCCESS);
+    result.push_back(Pair("success", success));
+
+    const char* status_str = "unknown";
+    switch (sbpf_result.result) {
+        case SBPF_SUCCESS: status_str = "success"; break;
+        case SBPF_INVALID_PROGRAM: status_str = "invalid_program"; break;
+        case SBPF_VERIFICATION_FAILED: status_str = "verification_failed"; break;
+        case SBPF_EXECUTION_FAILED: status_str = "execution_failed"; break;
+        case SBPF_OUT_OF_MEMORY: status_str = "out_of_memory"; break;
+        case SBPF_INVALID_PARAMETER: status_str = "invalid_parameter"; break;
+    }
+    result.push_back(Pair("status", status_str));
+    result.push_back(Pair("return_value", static_cast<int64_t>(sbpf_result.return_value)));
+    result.push_back(Pair("instruction_count", static_cast<int64_t>(sbpf_result.instruction_count)));
+    result.push_back(Pair("sbpf_version", SBPFExecutor::GetVersion()));
+
+    return result;
+}
+
+//-----------------------------------------------------------------------------
 // RPC Registration
 //-----------------------------------------------------------------------------
 
@@ -952,6 +1036,8 @@ static const CRPCCommand dions2Commands[] = {
     { "getsvmrentexemption",    &getsvmrentexemption,    false },
     // EVM Execution RPC
     { "executeevm",             &executeevm,             false },
+    // SVM Execution RPC
+    { "executesvm",             &executesvm,             false },
 };
 
 void RegisterDions2RPCs()
