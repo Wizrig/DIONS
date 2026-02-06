@@ -61,15 +61,22 @@ make -f makefile.osx clean && make -f makefile.osx -j4
 
 **Binary:** `iocoind` - 17MB arm64 Mach-O executable
 
+## Completed Tasks (Feb 5, 2026)
+- ✅ Wire up DIONS 2.0 RPCs in bitcoinrpc.cpp (added 7 new RPC commands)
+
 ## Pending Tasks
 
 ### High Priority
-1. **Wire up DIONS 2.0 RPCs** in bitcoinrpc.cpp
-   - Call `RegisterDions2RPCs()` during server initialization
+1. **Add GC trigger** for expired payloads during block processing
 
-2. **Add GC trigger** for expired payloads during block processing
-
-3. **Test DIONS 2.0 RPCs** - Run daemon and verify new endpoints work
+2. **Test DIONS 2.0 RPCs** - Run daemon and verify new endpoints work:
+   - `getdionsanchor <anchor_id>`
+   - `getdionsproof <anchor_id> <payload_hash>`
+   - `verifydionsproof <root> <leaf> <proof_json>`
+   - `getdionsquota <address> [month]`
+   - `getdionstier [stake_amount]`
+   - `getpayloadmode`
+   - `getdionsstats`
 
 ### Medium Priority
 4. **Review EVM/BPF work** for IoT lightweight contracts
@@ -168,6 +175,6 @@ This aligns with the tier-based quota system in Phase 0.
 
 ## Next Session Should
 1. ~~Fix boost::filesystem build issues~~ ✅ DONE
-2. Complete RPC integration (wire up RegisterDions2RPCs)
-3. Test DIONS 2.0 RPCs
+2. ~~Complete RPC integration~~ ✅ DONE (7 RPCs wired up)
+3. Test DIONS 2.0 RPCs (run daemon, test endpoints)
 4. Port PQC module from Dions-2.0 to DIONS main
