@@ -283,7 +283,12 @@ Value getdionstier(const Array& params, bool fHelp)
     result.push_back(Pair("min_stake_age_hours", 24));
 
     if (params.size() > 0) {
-        int64_t stake = params[0].get_int64();
+        int64_t stake;
+        if (params[0].type() == str_type) {
+            stake = std::stoll(params[0].get_str());
+        } else {
+            stake = params[0].get_int64();
+        }
         DionsTier tier = GetTierFromStake(stake);
         result.push_back(Pair("your_stake", stake));
         result.push_back(Pair("your_tier", TierToString(tier)));
@@ -712,7 +717,11 @@ Value createsvmaccount(const Array& params, bool fHelp)
 
     uint64_t lamports = 0;
     if (params.size() > 1) {
-        lamports = params[1].get_int64();
+        if (params[1].type() == str_type) {
+            lamports = std::stoull(params[1].get_str());
+        } else {
+            lamports = params[1].get_int64();
+        }
     }
 
     bool success = g_svm_executor->CreateAccount(pubkey, lamports);
@@ -781,7 +790,12 @@ Value getsvmrentexemption(const Array& params, bool fHelp)
         g_svm_executor = std::make_unique<SVMExecutor>();
     }
 
-    size_t data_size = static_cast<size_t>(params[0].get_int64());
+    size_t data_size;
+    if (params[0].type() == str_type) {
+        data_size = static_cast<size_t>(std::stoull(params[0].get_str()));
+    } else {
+        data_size = static_cast<size_t>(params[0].get_int64());
+    }
     uint64_t rent_exemption = g_svm_executor->CalculateRentExemption(data_size);
 
     Object result;
