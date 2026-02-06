@@ -10,6 +10,7 @@
 #include "util.h"
 #include "ui_interface.h"
 #include "checkpoints.h"
+#include "dions2/datalayer.h"
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 // boost/filesystem/convenience.hpp removed in modern Boost - functions now in boost/filesystem.hpp
@@ -89,6 +90,7 @@ void Shutdown(void* parg)
     {
         fShutdown = true;
         nTransactionsUpdated++;
+        dions2::ShutdownDataLayer();  // DIONS 2.0 cleanup
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
@@ -312,7 +314,12 @@ std::string HelpMessage()
         "  -rpcssl                                  " + _("Use OpenSSL (https) for JSON-RPC connections") + "\n" +
         "  -rpcsslcertificatechainfile=<file.cert>  " + _("Server certificate file (default: server.cert)") + "\n" +
         "  -rpcsslprivatekeyfile=<file.pem>         " + _("Server private key (default: server.pem)") + "\n" +
-        "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)") + "\n";
+        "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)") + "\n" +
+
+        "\n" + _("DIONS 2.0 options:") + "\n" +
+        "  -dions_payload_mode=<mode>  " + _("Set DIONS payload mode: legacy, anchor, hybrid (default: hybrid)") + "\n" +
+        "  -dions_data_layer=<type>    " + _("Set DIONS data layer: null, local (default: local)") + "\n" +
+        "  -dions_prune_interval=<n>   " + _("Interval in blocks between payload GC runs (default: 100)") + "\n";
 
     return strUsage;
 }
@@ -978,6 +985,31 @@ bool AppInit2()
 
     if (fServer)
         NewThread(ThreadRPCServer, NULL);
+
+    // ********************************************************* Step 11: DIONS 2.0 initialization
+    {
+        std::string strPayloadMode = GetArg("-dions_payload_mode", "hybrid");
+        dions2::PayloadMode payloadMode = dions2::PayloadMode::HYBRID;
+
+        if (strPayloadMode == "legacy") {
+            payloadMode = dions2::PayloadMode::LEGACY;
+        } else if (strPayloadMode == "anchor") {
+            payloadMode = dions2::PayloadMode::ANCHOR;
+        } else if (strPayloadMode == "hybrid") {
+            payloadMode = dions2::PayloadMode::HYBRID;
+        } else {
+            printf("Warning: Unknown -dions_payload_mode '%s', using 'hybrid'\n", strPayloadMode.c_str());
+        }
+
+        std::string dataDir = GetDataDir().string();
+        if (!dions2::InitializeDataLayer(payloadMode, dataDir)) {
+            printf("Warning: Failed to initialize DIONS 2.0 data layer\n");
+        } else {
+            printf("DIONS 2.0: Initialized with payload_mode=%s, data_layer=%s\n",
+                   strPayloadMode.c_str(),
+                   dions2::g_data_layer ? dions2::g_data_layer->GetTypeName().c_str() : "none");
+        }
+    }
 
     // ********************************************************* Step 12: finished
 

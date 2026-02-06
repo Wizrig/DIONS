@@ -36,19 +36,30 @@ ifndef OPENSSL_PREFIX
   endif
 endif
 
+# Berkeley DB path detection
+ifndef BDB_PREFIX
+  ifeq ($(shell test -d $(DEPSDIR)/opt/berkeley-db@4 && echo 1), 1)
+    BDB_PREFIX=$(DEPSDIR)/opt/berkeley-db@4
+  else ifeq ($(shell test -d $(DEPSDIR)/include/db48 && echo 1), 1)
+    BDB_PREFIX=$(DEPSDIR)
+    BDB_INCLUDE_SUFFIX=/db48
+    BDB_LIB_SUFFIX=/db48
+  else
+    BDB_PREFIX=$(DEPSDIR)
+  endif
+endif
+
 INCLUDEPATHS= \
  -I"$(CURDIR)" \
  -I"$(CURDIR)"/obj \
  -I"$(OPENSSL_PREFIX)/include" \
  -I"$(DEPSDIR)/include" \
- -I"$(DEPSDIR)/include/db48" \
- -I"$(DEPSDIR)/opt/berkeley-db@4/include"
+ -I"$(BDB_PREFIX)/include$(BDB_INCLUDE_SUFFIX)"
 
 LIBPATHS= \
  -L"$(OPENSSL_PREFIX)/lib" \
  -L"$(DEPSDIR)/lib" \
- -L"$(DEPSDIR)/lib/db48" \
- -L"$(DEPSDIR)/opt/berkeley-db@4/lib"
+ -L"$(BDB_PREFIX)/lib$(BDB_LIB_SUFFIX)"
 
 
 LIBS= -dead_strip
@@ -57,7 +68,7 @@ ifdef STATIC
 # Build STATIC if you are redistributing the iocoind binary
 # Modern Homebrew Boost: libraries don't have -mt suffix
 LIBS += \
- $(DEPSDIR)/lib/db48/libdb_cxx-4.8.a \
+ $(BDB_PREFIX)/lib$(BDB_LIB_SUFFIX)/libdb_cxx-4.8.a \
  $(DEPSDIR)/lib/libboost_system.a \
  $(DEPSDIR)/lib/libboost_filesystem.a \
  $(DEPSDIR)/lib/libboost_iostreams.a \
@@ -164,9 +175,26 @@ OBJS= \
     obj/keccak.o\
     obj/skein.o \
     obj/pbkdf2.o \
-    obj/kernel.o
+    obj/kernel.o \
+    obj/dions2/anchor.o \
+    obj/dions2/stakecheck.o \
+    obj/dions2/datalayer.o \
+    obj/dions2/dionsdb.o \
+    obj/dions2/anchor_rpc.o
 
 all: iocoind
+
+# Create dions2 object directory
+obj/dions2:
+	mkdir -p obj/dions2
+
+# DIONS 2.0 object files
+obj/dions2/%.o: dions2/%.cpp | obj/dions2
+	$(CXX) -c $(CFLAGS) -MMD -MF $(@:%.o=%.d) -o $@ $<
+	@cp $(@:%.o=%.d) $(@:%.o=%.P); \
+	  sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
+	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.o=%.d) >> $(@:%.o=%.P); \
+	  rm -f $(@:%.o=%.d)
 
 # Modern LevelDB includes memenv in libleveldb.a
 LIBS += $(CURDIR)/leveldb/libleveldb.a
@@ -207,5 +235,6 @@ clean:
 	-rm -f obj/*.o
 	-rm -f obj/*.P
 	-rm -f obj/build.h
+	-rm -rf obj/dions2
 
 FORCE:
