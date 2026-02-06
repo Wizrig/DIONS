@@ -102,8 +102,59 @@ cd /Users/taino/Desktop/DIONS-2.0-work/src
 make -f makefile.osx clean && make -f makefile.osx -j4
 ```
 
+## IoT/Lightweight Contracts Analysis
+
+### Existing Work in Dions-2.0 Repo
+The **Wizrig/Dions-2.0** repo already has significant IoT infrastructure:
+
+#### 1. Post-Quantum Cryptography (PQC) for IoT
+File: `include/dions/pqc.h`, `src/crypto/pqc.cpp`
+
+**Device Profiles:**
+- `IOT_MINIMAL` - Falcon512 + Kyber512 (smallest footprint)
+- `IOT_STANDARD` - Falcon512 + Kyber768
+- `ROBOT_STANDARD` - Dilithium3 + Kyber768
+- `ROBOT_PREMIUM` - Dilithium5 + Kyber1024
+
+**Falcon512 advantages for IoT:**
+- 690-byte signatures (vs 3293 for Dilithium3)
+- NIST Level 1 security
+- Optimized for constrained devices
+
+#### 2. Dual VM Architecture
+- **EVM Executor** (`include/dions/evm.h`) - Full Ethereum compatibility
+- **SVM Executor** (`include/dions/svm.h`) - Solana VM support
+
+#### 3. eBPF Strategy (From Derek's Analysis)
+File: `/Users/taino/Desktop/Derek/DIONS-DVM-Master/IOCOIN_MULTICHAIN_DVM_STRATEGY.md`
+
+**Option 3: eBPF VM Embedding**
+- Use `rbpf` library for lightweight contract execution
+- 2 weeks to embed basic eBPF VM
+- Ideal for IoT devices that can't run full EVM
+
+**Derek's IoT Recommendation:**
+> "Autonomous agents (AI, robots, IoT) cannot adapt to 100× fee spikes...
+> NTR: Agent knows quota, can autonomously manage usage"
+
+This aligns with the tier-based quota system in Phase 0.
+
+### IoT Contract Strategy
+
+| Device Type | VM | Crypto | Quota Tier |
+|------------|-----|--------|------------|
+| Sensor nodes | eBPF (future) | Falcon512+Kyber512 | BASIC |
+| Edge devices | SVM | Falcon512+Kyber768 | STANDARD |
+| Robots/Droids | EVM | Dilithium3+Kyber768 | PREMIUM |
+| Gateways | EVM | Dilithium5+Kyber1024 | ENTERPRISE |
+
+### Next Steps for IoT
+1. **Phase 1:** Integrate PQC from Dions-2.0 into DIONS main
+2. **Phase 2:** Add eBPF zone for ultra-lightweight contracts
+3. **Phase 3:** Device attestation via stake-weighted signatures
+
 ## Next Session Should
 1. Fix boost::filesystem build issues
 2. Complete RPC integration
 3. Test DIONS 2.0 RPCs
-4. Review IoT/lightweight contract strategy
+4. Port PQC module from Dions-2.0 to DIONS main
