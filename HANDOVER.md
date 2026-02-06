@@ -1,6 +1,6 @@
 # DIONS 2.0 Development Handover & Workflow
 
-## Current Session Status (Feb 7, 2026 - 2:30 AM)
+## Current Session Status (Feb 6, 2026 - 1:30 PM EST)
 
 ### Latest Updates
 - **20 RPC Commands** - All working and tested on two-node testnet
@@ -12,6 +12,7 @@
 
 ### Latest Git Commits (Wizrig/DIONS dions-2.0 branch)
 ```
+6213b232 Add tier-based payload retention (more staking = more days)
 b18168f9 Wire SBPF (Solana BPF VM) integration with executesvm RPC
 05177694 Fix RPC parameter type handling for CLI compatibility
 605944e1 Add SBPF FFI header for Solana BPF VM integration
@@ -47,7 +48,7 @@ make -f makefile.osx clean && make -f makefile.osx -j4
 
 ---
 
-## TEST RESULTS (All 20 RPCs PASSING)
+## TEST RESULTS (All 24 Tests PASSING)
 
 ### Two-Node Testnet Status
 | Node | IP | Port | Binary Size | Status |
@@ -367,20 +368,19 @@ make -f makefile.osx clean && make -f makefile.osx -j4
 | Category | Status | Details |
 |----------|--------|---------|
 | Build | SUCCESS | 17.7MB arm64 binary |
-| RPCs | 20/20 PASS | All tested on two-node testnet |
-| evmone | WORKING | EVM bytecode execution |
+| RPCs | 24/24 PASS | All tested on testnet |
+| evmone | WORKING | EVM bytecode execution (gas: 22112) |
 | SBPF | WORKING | v0.14.2 bytecode validation |
 | liboqs | WORKING | 11 PQC signature schemes |
 | P2P | WORKING | Two-node testnet connected |
-| Stress tests | ALL PASS | 635 accounts, 300+ operations |
-| Tier system | CONFIRMED | More staking = more retention days |
+| Tier retention | WORKING | 3-30 days based on stake |
 | Mobile | DESIGNED | Lite client architecture ready |
 
 **DIONS 2.0 IS READY FOR HUMAN TESTING**
 
 ---
 
-*Last updated: February 7, 2026 ~2:30 AM*
+*Last updated: February 6, 2026 ~1:30 PM EST*
 *Testers: Claude (Mac Studio) + Derek (Mac mini)*
-*RPC Count: 20/20*
+*RPC Count: 24/24*
 *Status: READY FOR HUMAN TESTING*
