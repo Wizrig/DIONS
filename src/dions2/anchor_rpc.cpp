@@ -7,6 +7,8 @@
 #include "dionsdb.h"
 #include "gc.h"
 #include "hybrid_sig.h"
+#include "evm.h"
+#include "svm.h"
 #include "../bitcoinrpc.h"
 #include "../main.h"
 #include "../wallet.h"
@@ -536,6 +538,259 @@ Value getrecommendedsigscheme(const Array& params, bool fHelp)
 }
 
 //-----------------------------------------------------------------------------
+// EVM Zone RPCs
+//-----------------------------------------------------------------------------
+
+// Global EVM executor instance (Phase 0 - in-memory only)
+static std::unique_ptr<EVMExecutor> g_evm_executor;
+
+Value getevmstats(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw std::runtime_error(
+            "getevmstats\n"
+            "Get EVM zone statistics.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"enabled\": true|false,\n"
+            "  \"account_count\": n,\n"
+            "  \"status\": \"xxx\"\n"
+            "}\n"
+        );
+
+    Object result;
+    result.push_back(Pair("enabled", true));
+
+    if (!g_evm_executor) {
+        g_evm_executor = std::make_unique<EVMExecutor>();
+    }
+
+    result.push_back(Pair("account_count", static_cast<int>(g_evm_executor->GetAccountCount())));
+    result.push_back(Pair("status", "phase0_state_only"));
+    result.push_back(Pair("evmone_integrated", false));
+    result.push_back(Pair("note", "EVM bytecode execution requires evmone integration"));
+
+    return result;
+}
+
+Value createevmaccount(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 2)
+        throw std::runtime_error(
+            "createevmaccount <address> [balance_hex]\n"
+            "Create an EVM account in the DIONS 2.0 EVM zone.\n"
+            "\nArguments:\n"
+            "1. address     (string, required) 20-byte EVM address (hex with 0x prefix)\n"
+            "2. balance_hex (string, optional) Initial balance as hex (default: 0)\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"success\": true|false,\n"
+            "  \"address\": \"0x...\"\n"
+            "}\n"
+        );
+
+    if (!g_evm_executor) {
+        g_evm_executor = std::make_unique<EVMExecutor>();
+    }
+
+    std::string addr_str = params[0].get_str();
+    std::vector<uint8_t> address = HexToBytes(addr_str);
+
+    std::vector<uint8_t> balance;
+    if (params.size() > 1) {
+        balance = HexToBytes(params[1].get_str());
+    }
+
+    bool success = g_evm_executor->CreateAccount(address, balance);
+
+    Object result;
+    result.push_back(Pair("success", success));
+    result.push_back(Pair("address", BytesToHex(address)));
+
+    return result;
+}
+
+Value getevmbalance(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw std::runtime_error(
+            "getevmbalance <address>\n"
+            "Get EVM account balance.\n"
+            "\nArguments:\n"
+            "1. address (string, required) 20-byte EVM address (hex with 0x prefix)\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"address\": \"0x...\",\n"
+            "  \"balance\": \"0x...\"\n"
+            "}\n"
+        );
+
+    if (!g_evm_executor) {
+        g_evm_executor = std::make_unique<EVMExecutor>();
+    }
+
+    std::vector<uint8_t> address = HexToBytes(params[0].get_str());
+    std::vector<uint8_t> balance = g_evm_executor->GetBalance(address);
+
+    Object result;
+    result.push_back(Pair("address", BytesToHex(address)));
+    result.push_back(Pair("balance", BytesToHex(balance)));
+    result.push_back(Pair("exists", g_evm_executor->AccountExists(address)));
+
+    return result;
+}
+
+//-----------------------------------------------------------------------------
+// SVM Zone RPCs
+//-----------------------------------------------------------------------------
+
+// Global SVM executor instance (Phase 0 - in-memory only)
+static std::unique_ptr<SVMExecutor> g_svm_executor;
+
+Value getsvmstats(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw std::runtime_error(
+            "getsvmstats\n"
+            "Get SVM (Solana VM) zone statistics.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"enabled\": true|false,\n"
+            "  \"account_count\": n,\n"
+            "  \"slot\": n,\n"
+            "  \"compute_budget\": n,\n"
+            "  \"status\": \"xxx\"\n"
+            "}\n"
+        );
+
+    Object result;
+    result.push_back(Pair("enabled", true));
+
+    if (!g_svm_executor) {
+        g_svm_executor = std::make_unique<SVMExecutor>();
+    }
+
+    result.push_back(Pair("account_count", static_cast<int>(g_svm_executor->GetAccountCount())));
+    result.push_back(Pair("slot", static_cast<int64_t>(g_svm_executor->GetSlot())));
+    result.push_back(Pair("compute_budget", static_cast<int64_t>(g_svm_executor->GetComputeBudget())));
+    result.push_back(Pair("status", "phase0_state_only"));
+    result.push_back(Pair("bpf_runtime_integrated", false));
+    result.push_back(Pair("note", "SVM bytecode execution requires BPF runtime integration"));
+
+    return result;
+}
+
+Value createsvmaccount(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 2)
+        throw std::runtime_error(
+            "createsvmaccount <pubkey_hex> [lamports]\n"
+            "Create an SVM (Solana-style) account in the DIONS 2.0 SVM zone.\n"
+            "\nArguments:\n"
+            "1. pubkey_hex (string, required) 32-byte public key (hex with 0x prefix)\n"
+            "2. lamports   (numeric, optional) Initial balance in lamports (default: 0)\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"success\": true|false,\n"
+            "  \"pubkey\": \"0x...\"\n"
+            "}\n"
+        );
+
+    if (!g_svm_executor) {
+        g_svm_executor = std::make_unique<SVMExecutor>();
+    }
+
+    std::string pubkey_str = params[0].get_str();
+    std::vector<uint8_t> pubkey_bytes = HexToBytes(pubkey_str);
+
+    if (pubkey_bytes.size() != 32) {
+        throw JSONRPCError(RPC_INVALID_PARAMS, "Public key must be 32 bytes");
+    }
+
+    SolanaPublicKey pubkey = BytesToPublicKey(pubkey_bytes);
+
+    uint64_t lamports = 0;
+    if (params.size() > 1) {
+        lamports = params[1].get_int64();
+    }
+
+    bool success = g_svm_executor->CreateAccount(pubkey, lamports);
+
+    Object result;
+    result.push_back(Pair("success", success));
+    result.push_back(Pair("pubkey", PublicKeyToString(pubkey)));
+    result.push_back(Pair("lamports", static_cast<int64_t>(lamports)));
+
+    return result;
+}
+
+Value getsvmbalance(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw std::runtime_error(
+            "getsvmbalance <pubkey_hex>\n"
+            "Get SVM account balance in lamports.\n"
+            "\nArguments:\n"
+            "1. pubkey_hex (string, required) 32-byte public key (hex with 0x prefix)\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"pubkey\": \"0x...\",\n"
+            "  \"lamports\": n,\n"
+            "  \"exists\": true|false\n"
+            "}\n"
+        );
+
+    if (!g_svm_executor) {
+        g_svm_executor = std::make_unique<SVMExecutor>();
+    }
+
+    std::vector<uint8_t> pubkey_bytes = HexToBytes(params[0].get_str());
+
+    if (pubkey_bytes.size() != 32) {
+        throw JSONRPCError(RPC_INVALID_PARAMS, "Public key must be 32 bytes");
+    }
+
+    SolanaPublicKey pubkey = BytesToPublicKey(pubkey_bytes);
+    uint64_t lamports = g_svm_executor->GetBalance(pubkey);
+
+    Object result;
+    result.push_back(Pair("pubkey", PublicKeyToString(pubkey)));
+    result.push_back(Pair("lamports", static_cast<int64_t>(lamports)));
+    result.push_back(Pair("exists", g_svm_executor->AccountExists(pubkey)));
+
+    return result;
+}
+
+Value getsvmrentexemption(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw std::runtime_error(
+            "getsvmrentexemption <data_size>\n"
+            "Calculate rent exemption amount for given data size.\n"
+            "\nArguments:\n"
+            "1. data_size (numeric, required) Account data size in bytes\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"data_size\": n,\n"
+            "  \"rent_exemption_lamports\": n\n"
+            "}\n"
+        );
+
+    if (!g_svm_executor) {
+        g_svm_executor = std::make_unique<SVMExecutor>();
+    }
+
+    size_t data_size = static_cast<size_t>(params[0].get_int64());
+    uint64_t rent_exemption = g_svm_executor->CalculateRentExemption(data_size);
+
+    Object result;
+    result.push_back(Pair("data_size", static_cast<int64_t>(data_size)));
+    result.push_back(Pair("rent_exemption_lamports", static_cast<int64_t>(rent_exemption)));
+
+    return result;
+}
+
+//-----------------------------------------------------------------------------
 // RPC Registration
 //-----------------------------------------------------------------------------
 
@@ -553,6 +808,15 @@ static const CRPCCommand dions2Commands[] = {
     { "forcedionsgc",           &forcedionsgc,           false },
     { "gethybridsigschemes",    &gethybridsigschemes,    false },
     { "getrecommendedsigscheme",&getrecommendedsigscheme,false },
+    // EVM Zone RPCs
+    { "getevmstats",            &getevmstats,            false },
+    { "createevmaccount",       &createevmaccount,       false },
+    { "getevmbalance",          &getevmbalance,          false },
+    // SVM Zone RPCs
+    { "getsvmstats",            &getsvmstats,            false },
+    { "createsvmaccount",       &createsvmaccount,       false },
+    { "getsvmbalance",          &getsvmbalance,          false },
+    { "getsvmrentexemption",    &getsvmrentexemption,    false },
 };
 
 void RegisterDions2RPCs()

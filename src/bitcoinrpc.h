@@ -327,4 +327,15 @@ extern json_spirit::Value forcedionsgc(const json_spirit::Array& params, bool fH
 extern json_spirit::Value gethybridsigschemes(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getrecommendedsigscheme(const json_spirit::Array& params, bool fHelp);
 
+// DIONS 2.0 EVM Zone RPCs
+extern json_spirit::Value getevmstats(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value createevmaccount(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getevmbalance(const json_spirit::Array& params, bool fHelp);
+
+// DIONS 2.0 SVM Zone RPCs
+extern json_spirit::Value getsvmstats(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value createsvmaccount(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getsvmbalance(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getsvmrentexemption(const json_spirit::Array& params, bool fHelp);
+
 #endif

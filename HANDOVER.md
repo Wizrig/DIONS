@@ -1,9 +1,15 @@
 # DIONS 2.0 Development Handover
 
-## Current Session Status (Feb 6, 2026 - Updated)
+## Current Session Status (Feb 7, 2026 - 1:00 AM)
+
+### Latest Updates
+- **EVM Zone Module** - Ethereum Virtual Machine state management
+- **SVM Zone Module** - Solana Virtual Machine state management
+- **18 Total RPC Commands** - 7 new EVM/SVM RPCs added
 
 ### Latest Git Commits (Wizrig/DIONS dions-2.0 branch)
 ```
+(pending) Add EVM and SVM zone modules
 f257ab2a Add hybrid signature RPCs
 661028bd Add GC module and hybrid PQC signature support
 ea76bbba Update HANDOVER.md: PQC module ported successfully
@@ -52,8 +58,10 @@ Created `src/dions2/` with new architecture:
 - `dionsdb.h/cpp` - LevelDB schemas for anchors/payloads/quotas
 - `anchor_rpc.cpp` - New RPCs (9 commands)
 
-### 2. RPC Commands Wired Up (11 Total)
+### 2. RPC Commands Wired Up (18 Total)
 Added to `bitcoinrpc.cpp`:
+
+**Core DIONS 2.0 (11 commands):**
 - `getdionsanchor <anchor_id>` - Get anchor details
 - `getdionsproof <anchor_id> <payload_hash>` - Get Merkle proof
 - `verifydionsproof <root> <leaf> <proof_json>` - Verify proof
@@ -63,8 +71,19 @@ Added to `bitcoinrpc.cpp`:
 - `getdionsstats` - Get DIONS statistics
 - `getdionsgcstats` - Get GC statistics
 - `forcedionsgc` - Force a GC run
-- `gethybridsigschemes` - List hybrid signature schemes **NEW**
-- `getrecommendedsigscheme` - Get recommended scheme for device **NEW**
+- `gethybridsigschemes` - List hybrid signature schemes
+- `getrecommendedsigscheme` - Get recommended scheme for device
+
+**EVM Zone (3 commands) - NEW:**
+- `getevmstats` - Get EVM zone statistics
+- `createevmaccount <address> [balance_hex]` - Create EVM account
+- `getevmbalance <address>` - Get EVM account balance
+
+**SVM Zone (4 commands) - NEW:**
+- `getsvmstats` - Get SVM (Solana VM) zone statistics
+- `createsvmaccount <pubkey_hex> [lamports]` - Create SVM account
+- `getsvmbalance <pubkey_hex>` - Get SVM account balance
+- `getsvmrentexemption <data_size>` - Calculate rent exemption
 
 ### 3. PQC Module Ported
 New files in `src/dions2/crypto/`:
@@ -89,7 +108,7 @@ New files in `src/dions2/crypto/`:
 - `ROBOT_STANDARD`: Dilithium3 + Kyber768
 - `ROBOT_PREMIUM`: Dilithium5 + Kyber1024
 
-### 4. GC Module Added ✅ NEW
+### 4. GC Module Added ✅
 New files:
 - `gc.h` - GC configuration, statistics, and API
 - `gc.cpp` - Implementation
@@ -104,6 +123,38 @@ New files:
 - Hooks into `SetBestChain` for automatic triggering
 - RPC commands: `getdionsgcstats`, `forcedionsgc`
 
+### 5. EVM Zone Module Added ✅ NEW
+New files:
+- `evm.h` - EVM account, transaction, and executor interfaces
+- `evm.cpp` - State management implementation
+
+**Features:**
+- Account management (create, balance, transfer)
+- Code storage and retrieval
+- Storage (key-value) operations
+- Contract deployment (CREATE and CREATE2 address generation)
+- State checkpoints and rollback
+- 256-bit big integer arithmetic
+
+**Status:** State management complete. Requires evmone integration for bytecode execution.
+
+### 6. SVM Zone Module Added ✅ NEW
+New files:
+- `svm.h` - Solana account, transaction, and executor interfaces
+- `svm.cpp` - State management implementation
+
+**Features:**
+- Account management with Solana-style 32-byte public keys
+- Lamport balance operations
+- Account data storage and resizing
+- Built-in programs: System, Token, Associated Token, Rent
+- Rent exemption calculations
+- Program Derived Addresses (PDAs)
+- Compute budget management
+- System program handlers: CreateAccount, Assign, Transfer
+
+**Status:** State management complete. Requires BPF runtime for custom program execution.
+
 ---
 
 ## PENDING TASKS 📋
@@ -111,19 +162,21 @@ New files:
 ### High Priority
 1. **Test DIONS 2.0 RPCs on Derek's Mac mini**
    - Run daemon with testnet
-   - Test all 9 new RPC endpoints
+   - Test all 18 RPC endpoints
    - Verify stake checking works
 
-2. **Integrate PQC with DIONS message signing**
-   - Add PQC signature option for DIONS messages
-   - Hybrid mode: Ed25519 + Falcon for transition
+2. **Integrate evmone for EVM bytecode execution**
+   - Link evmone library
+   - Implement EVMC host interface
+   - Test smart contract deployment
 
 ### Medium Priority
-3. **Review EVM/BPF work** for IoT lightweight contracts
-   - eBPF VM embedding (rbpf library)
-   - Check Derek's DVM strategy document
+3. **Integrate BPF runtime for SVM**
+   - rbpf library integration
+   - Solana program execution
 
-4. **Port EVM/SVM executors** from Dions-2.0
+4. **Integrate liboqs for production PQC**
+   - Replace reference implementations with NIST-certified algorithms
 
 ---
 
@@ -175,8 +228,10 @@ struct GCConfig {
 | `/Users/taino/Desktop/DIONS-2.0-work/` | Main DIONS repo (dions-2.0 branch) |
 | `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/` | Phase 0 anchor code |
 | `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/crypto/` | PQC module |
-| `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/gc.h` | GC configuration & API |
-| `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/gc.cpp` | GC implementation |
+| `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/gc.h/cpp` | GC module |
+| `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/evm.h/cpp` | EVM Zone module **NEW** |
+| `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/svm.h/cpp` | SVM Zone module **NEW** |
+| `/Users/taino/Desktop/DIONS-2.0-work/src/dions2/hybrid_sig.h/cpp` | Hybrid signatures |
 | `/Users/taino/Desktop/Dions-2.0-cleanup/` | Cleaned Dions-2.0 repo |
 | `/Users/taino/Desktop/Derek/DIONS-DVM-Master/` | DVM/EVM code + documentation |
 | `/Users/taino/Desktop/ioc-recovery/` | Blockchain data directory |
@@ -194,11 +249,12 @@ struct GCConfig {
 
 ### Tasks for Derek (see DEREK_TASKS.md for details):
 1. Run iocoind daemon on testnet
-2. Test DIONS 2.0 RPC endpoints (9 commands now)
+2. Test DIONS 2.0 RPC endpoints (18 commands now)
 3. Security review of new RPCs
 4. PQC module unit testing
 5. GC module testing
-6. Can commit under "reed"
+6. EVM/SVM zone testing **NEW**
+7. Can commit under "reed"
 
 ---
 

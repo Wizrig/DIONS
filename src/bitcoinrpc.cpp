@@ -458,6 +458,15 @@ static const CRPCCommand vRPCCommands[] =
     { "forcedionsgc",           &forcedionsgc,           false,  false },
     { "gethybridsigschemes",    &gethybridsigschemes,    true,   false },
     { "getrecommendedsigscheme",&getrecommendedsigscheme,true,   false },
+    // EVM Zone RPCs
+    { "getevmstats",            &getevmstats,            true,   false },
+    { "createevmaccount",       &createevmaccount,       false,  false },
+    { "getevmbalance",          &getevmbalance,          true,   false },
+    // SVM Zone RPCs
+    { "getsvmstats",            &getsvmstats,            true,   false },
+    { "createsvmaccount",       &createsvmaccount,       false,  false },
+    { "getsvmbalance",          &getsvmbalance,          true,   false },
+    { "getsvmrentexemption",    &getsvmrentexemption,    true,   false },
 };
 
 CRPCTable::CRPCTable()

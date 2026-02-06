@@ -183,6 +183,8 @@ OBJS= \
     obj/dions2/anchor_rpc.o \
     obj/dions2/gc.o \
     obj/dions2/hybrid_sig.o \
+    obj/dions2/evm.o \
+    obj/dions2/svm.o \
     obj/dions2/crypto/pqc.o
 
 all: iocoind
