@@ -338,4 +338,7 @@ extern json_spirit::Value createsvmaccount(const json_spirit::Array& params, boo
 extern json_spirit::Value getsvmbalance(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getsvmrentexemption(const json_spirit::Array& params, bool fHelp);
 
+// DIONS 2.0 EVM Execution RPC (evmone)
+extern json_spirit::Value executeevm(const json_spirit::Array& params, bool fHelp);
+
 #endif

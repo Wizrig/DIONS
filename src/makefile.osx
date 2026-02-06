@@ -62,6 +62,16 @@ ifndef LIBOQS_PREFIX
   endif
 endif
 
+# evmone path detection for EVM bytecode execution
+ifndef EVMONE_PREFIX
+  ifeq ($(shell test -d /Users/taino/ioc-build/deps/evmone && echo 1), 1)
+    EVMONE_PREFIX=/Users/taino/ioc-build/deps/evmone
+    HAVE_EVMONE=1
+  else
+    HAVE_EVMONE=0
+  endif
+endif
+
 INCLUDEPATHS= \
  -I"$(CURDIR)" \
  -I"$(CURDIR)"/obj \
@@ -74,6 +84,11 @@ ifeq ($(HAVE_LIBOQS), 1)
   INCLUDEPATHS += -I"$(LIBOQS_PREFIX)/include"
 endif
 
+# Add evmone/EVMC include paths if available
+ifeq ($(HAVE_EVMONE), 1)
+  INCLUDEPATHS += -I"$(EVMONE_PREFIX)/evmc/include"
+endif
+
 LIBPATHS= \
  -L"$(OPENSSL_PREFIX)/lib" \
  -L"$(DEPSDIR)/lib" \
@@ -82,6 +97,11 @@ LIBPATHS= \
 # Add liboqs lib path if available
 ifeq ($(HAVE_LIBOQS), 1)
   LIBPATHS += -L"$(LIBOQS_PREFIX)/lib"
+endif
+
+# Add evmone lib path if available
+ifeq ($(HAVE_EVMONE), 1)
+  LIBPATHS += -L"$(EVMONE_PREFIX)/build/lib"
 endif
 
 
@@ -120,6 +140,11 @@ LIBS += \
 ifeq ($(HAVE_LIBOQS), 1)
   LIBS += -loqs
 endif
+
+# Add evmone library if available
+ifeq ($(HAVE_EVMONE), 1)
+  LIBS += -levmone
+endif
 endif
 
 DEFS=-DMAC_OSX -DMSG_NOSIGNAL=0 -DBOOST_SPIRIT_THREADSAFE
@@ -127,6 +152,11 @@ DEFS=-DMAC_OSX -DMSG_NOSIGNAL=0 -DBOOST_SPIRIT_THREADSAFE
 # Add HAVE_LIBOQS define if liboqs is available
 ifeq ($(HAVE_LIBOQS), 1)
   DEFS += -DHAVE_LIBOQS
+endif
+
+# Add HAVE_EVMONE define if evmone is available
+ifeq ($(HAVE_EVMONE), 1)
+  DEFS += -DHAVE_EVMONE
 endif
 
 # Detect architecture for platform-specific flags
@@ -219,7 +249,8 @@ OBJS= \
     obj/dions2/evm.o \
     obj/dions2/svm.o \
     obj/dions2/crypto/pqc.o \
-    obj/dions2/crypto/pqc_liboqs.o
+    obj/dions2/crypto/pqc_liboqs.o \
+    obj/dions2/evmc_host.o
 
 all: iocoind
 

@@ -9,6 +9,7 @@
 #include "hybrid_sig.h"
 #include "evm.h"
 #include "svm.h"
+#include "evmc_host.h"
 #include "../bitcoinrpc.h"
 #include "../main.h"
 #include "../wallet.h"
@@ -791,6 +792,124 @@ Value getsvmrentexemption(const Array& params, bool fHelp)
 }
 
 //-----------------------------------------------------------------------------
+// executeevm - Execute EVM bytecode using evmone
+//-----------------------------------------------------------------------------
+Value executeevm(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 3)
+        throw std::runtime_error(
+            "executeevm <bytecode_hex> [gas_limit] [sender_address]\n"
+            "Execute EVM bytecode using evmone.\n"
+            "\nArguments:\n"
+            "1. bytecode_hex    (string, required) EVM bytecode as hex (with 0x prefix)\n"
+            "2. gas_limit       (numeric, optional) Gas limit (default: 1000000)\n"
+            "3. sender_address  (string, optional) Sender address (default: zero address)\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"success\": true|false,\n"
+            "  \"status\": \"xxx\",\n"
+            "  \"gas_used\": n,\n"
+            "  \"output\": \"0x...\",\n"
+            "  \"error\": \"xxx\" (if failed)\n"
+            "}\n"
+        );
+
+    // Check if evmone is available
+    if (!IsEvmoneAvailable()) {
+        Object result;
+        result.push_back(Pair("success", false));
+        result.push_back(Pair("error", "evmone not available - compile with HAVE_EVMONE"));
+        return result;
+    }
+
+    // Initialize EVM executor if needed
+    if (!g_evm_executor) {
+        g_evm_executor = std::make_unique<EVMExecutor>();
+    }
+
+    // Parse bytecode
+    std::vector<uint8_t> bytecode = HexToBytes(params[0].get_str());
+
+    // Parse gas limit
+    int64_t gas_limit = 1000000;
+    if (params.size() > 1) {
+        gas_limit = params[1].get_int64();
+    }
+
+    // Parse sender address
+    std::vector<uint8_t> sender(20, 0);
+    if (params.size() > 2) {
+        sender = HexToBytes(params[2].get_str());
+    }
+
+    // Create EVM context
+    EVMCHostContext ctx(g_evm_executor.get());
+
+    // Create message
+    evmc_message msg;
+    std::memset(&msg, 0, sizeof(msg));
+    msg.kind = EVMC_CALL;
+    msg.gas = gas_limit;
+    std::memcpy(msg.sender.bytes, sender.data(), std::min(sender.size(), size_t(20)));
+
+    // Create VM and execute
+    evmc_vm* vm = EVMCHost::CreateVM();
+    if (!vm) {
+        Object result;
+        result.push_back(Pair("success", false));
+        result.push_back(Pair("error", "Failed to create evmone VM instance"));
+        return result;
+    }
+
+    EVMResult evm_result = EVMCHost::Execute(
+        vm,
+        &ctx,
+        EVMC_CANCUN,  // Use latest stable revision
+        &msg,
+        bytecode.data(),
+        bytecode.size()
+    );
+
+    EVMCHost::DestroyVM(vm);
+
+    // Build response
+    Object result;
+    result.push_back(Pair("success", evm_result.IsSuccess()));
+
+    const char* status_str = "unknown";
+    switch (evm_result.status) {
+        case EVMResult::SUCCESS: status_str = "success"; break;
+        case EVMResult::REVERT: status_str = "revert"; break;
+        case EVMResult::OUT_OF_GAS: status_str = "out_of_gas"; break;
+        case EVMResult::INVALID_INSTRUCTION: status_str = "invalid_instruction"; break;
+        case EVMResult::UNDEFINED_INSTRUCTION: status_str = "undefined_instruction"; break;
+        case EVMResult::STACK_OVERFLOW: status_str = "stack_overflow"; break;
+        case EVMResult::STACK_UNDERFLOW: status_str = "stack_underflow"; break;
+        case EVMResult::BAD_JUMP_DESTINATION: status_str = "bad_jump_destination"; break;
+        case EVMResult::INVALID_MEMORY_ACCESS: status_str = "invalid_memory_access"; break;
+        case EVMResult::CALL_DEPTH_EXCEEDED: status_str = "call_depth_exceeded"; break;
+        case EVMResult::STATIC_MODE_VIOLATION: status_str = "static_mode_violation"; break;
+        case EVMResult::PRECOMPILE_FAILURE: status_str = "precompile_failure"; break;
+        case EVMResult::CONTRACT_VALIDATION_FAILURE: status_str = "contract_validation_failure"; break;
+        case EVMResult::ARGUMENT_OUT_OF_RANGE: status_str = "argument_out_of_range"; break;
+        case EVMResult::INSUFFICIENT_BALANCE: status_str = "insufficient_balance"; break;
+        case EVMResult::INTERNAL_ERROR: status_str = "internal_error"; break;
+    }
+    result.push_back(Pair("status", status_str));
+    result.push_back(Pair("gas_used", static_cast<int64_t>(evm_result.gas_used)));
+
+    if (!evm_result.output.empty()) {
+        result.push_back(Pair("output", BytesToHex(evm_result.output)));
+    }
+
+    if (!evm_result.error_message.empty()) {
+        result.push_back(Pair("error", evm_result.error_message));
+    }
+
+    return result;
+}
+
+//-----------------------------------------------------------------------------
 // RPC Registration
 //-----------------------------------------------------------------------------
 
@@ -817,6 +936,8 @@ static const CRPCCommand dions2Commands[] = {
     { "createsvmaccount",       &createsvmaccount,       false },
     { "getsvmbalance",          &getsvmbalance,          false },
     { "getsvmrentexemption",    &getsvmrentexemption,    false },
+    // EVM Execution RPC
+    { "executeevm",             &executeevm,             false },
 };
 
 void RegisterDions2RPCs()

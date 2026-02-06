@@ -467,6 +467,8 @@ static const CRPCCommand vRPCCommands[] =
     { "createsvmaccount",       &createsvmaccount,       false,  false },
     { "getsvmbalance",          &getsvmbalance,          true,   false },
     { "getsvmrentexemption",    &getsvmrentexemption,    true,   false },
+    // EVM Execution (evmone)
+    { "executeevm",             &executeevm,             false,  false },
 };
 
 CRPCTable::CRPCTable()
