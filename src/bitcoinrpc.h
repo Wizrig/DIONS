@@ -314,4 +314,13 @@ extern json_spirit::Value node_rescan(const json_spirit::Array& params, bool fHe
 extern json_spirit::Value nodeDebug(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value nodeDebug1(const json_spirit::Array& params, bool fHelp);
 
+// DIONS 2.0 RPCs (in dions2/anchor_rpc.cpp)
+extern json_spirit::Value getdionsanchor(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getdionsproof(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value verifydionsproof(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getdionsquota(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getdionstier(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getpayloadmode(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getdionsstats(const json_spirit::Array& params, bool fHelp);
+
 #endif

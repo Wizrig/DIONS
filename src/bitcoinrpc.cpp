@@ -446,6 +446,14 @@ static const CRPCCommand vRPCCommands[] =
     { "resendtx",               &resendtx,               false,  true},
     { "makekeypair",            &makekeypair,            false,  true},
     { "sendalert",              &sendalert,              false,  false},
+    // DIONS 2.0 Anchor RPCs
+    { "getdionsanchor",         &getdionsanchor,         true,   false },
+    { "getdionsproof",          &getdionsproof,          true,   false },
+    { "verifydionsproof",       &verifydionsproof,       true,   false },
+    { "getdionsquota",          &getdionsquota,          true,   false },
+    { "getdionstier",           &getdionstier,           true,   false },
+    { "getpayloadmode",         &getpayloadmode,         true,   false },
+    { "getdionsstats",          &getdionsstats,          true,   false },
 };
 
 CRPCTable::CRPCTable()
